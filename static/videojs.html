@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset=utf-8 />
+    <title>LivePeer</title>   
+    <meta charset="utf-8">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/5.10.2/alt/video-js-cdn.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/5.10.2/video.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/videojs-contrib-hls/3.0.2/videojs-contrib-hls.js"></script>
+    <script type="text/javascript" src="js/jquery-1.10.2.min.js"></script>
+    <script type="text/javascript" src="js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="js/winlin.utility.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css"/>
+    <style>
+        .video-js.vjs-default-skin .vjs-big-play-button { display: none; }
+    </style>
+    <script type="text/javascript">
+        $(function(){
+            var query = parse_query_string();
+
+            // $("#txt-stream-id").val(query.getParam("streamID"));
+
+            $("#btn-play-hls").click(function(){
+                var stream_id = $("#txt-stream-id").val();
+                var format = $('#r-video-format input:radio:checked').val();
+                // var url;
+                var conf;
+                if (format == "rtmp") {
+                    conf = {
+                        src: "http://" + query.host + "/stream/" + stream_id + "",
+                        type: 'video/x-flv'
+                    };
+                }   
+                else if (format == "hls") {
+                    conf = {
+                        src: "http://" + query.host + "/stream/" + stream_id + ".m3u8",
+                        type: 'application/x-mpegURL'
+                    };
+                } else {
+                    console.log("Invalid video format: " + format);
+                }
+
+                var player = videojs('livepeer-video');
+                console.log(conf);
+                player.src(conf);
+                player.play();
+            });
+
+        });
+    </script>
+</head>
+
+<body>
+<div class="navbar navbar-fixed-top">
+    <div class="navbar-inner">
+        <div class="container">
+            <a id="srs_index" class="brand" href="#">LivePeer</a>
+            <div class="nav-collapse collapse">
+                <ul class="nav">
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="container">
+    <div class="alert alert-info fade in">
+        <button type="button" class="close" data-dismiss="alert">×</button>
+        <strong><span>Usage:</span></strong> <span>Enter Stream ID to play</span>
+    </div>
+    <div class="form-inline">
+        Stream ID:
+        <input type="text" id="txt-stream-id" class="input-xxlarge" value="">
+    </div>
+    <div class="form-inline">
+        <div class="radio" id="r-video-format">
+            Video Format:
+            <label><input type="radio" name="videoformat" value="hls">HLS</label>
+            <label><input type="radio" name="videoformat" value="rtmp">RTMP</label>
+        </div>
+    </div>
+    <div class="form-inline">
+        <button class="btn btn-primary" id="btn-play-hls"> Play </button>
+    </div>
+    <hr/>
+    <!--<div class="form-inline">
+        URL:
+        <input type="text" id="txt-rtmp-url" class="input-xxlarge" value=""></input>
+        <button class="btn btn-primary" id="btn-play-rtmp">播放RTMP</button>
+    </div>
+    <hr/>
+    <div class="form-inline">
+        URL:
+        <input type="text" id="txt-hls-url" class="input-xxlarge" value=""></input>
+        <button class="btn btn-primary" id="btn-play-hls"> 播放HLS </button>
+    </div>-->
+    <div class="form-inline">
+            <video id="livepeer-video" class="video-js vjs-default-skin" controls preload="auto" width="640" height="268" 
+            data-setup='{}'>
+                <!--<source src="http://localhost:8935/stream/133bd3c4e543e3cd53e2cf2b366eeeace7eae483b651b8b1e2a2072b250864fca9f3789535a6a1fd9db5c6869eaea3e79711648b4c2342a2132f825229bbd30f.m3u8"
+                type="application/vnd.apple.mpegURL">-->
+            </video>
+    </div>
+    <hr>
+    <footer>
+    </footer>
+</div>
+</body>
+
+
+</html>
