@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
-	lpmsIo "github.com/livepeer/lpms/io"
+	lpmsIo "github.com/livepeer/go-livepeer/lpms/io"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 )
 

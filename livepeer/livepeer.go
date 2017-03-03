@@ -38,7 +38,7 @@ import (
 	"github.com/livepeer/go-livepeer/livepeer/network"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
-	"github.com/livepeer/lpms"
+	"github.com/livepeer/go-livepeer/lpms"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 	"golang.org/x/net/context"
 )
