@@ -124,7 +124,7 @@ var (
 	}
 	LivepeerNetworkIdFlag = cli.IntFlag{
 		Name:  "lpnetworkid",
-		Usage: "Network identifier (integer, default 326=livepeer toy net)",
+		Usage: "Network identifier (integer, default 326326=livepeer toy net)",
 		Value: network.NetworkId,
 	}
 )

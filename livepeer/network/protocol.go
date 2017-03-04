@@ -54,7 +54,7 @@ const (
 	Version            = 0
 	ProtocolLength     = uint64(11)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
-	NetworkId          = 326
+	NetworkId          = 326326
 )
 
 const (
