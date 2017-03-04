@@ -41,8 +41,9 @@ const (
 var (
 	gitCommit        string
 	app              = utils.NewApp(gitCommit, "Livepeer")
-	testbetBootNodes = []string{
+	toynetBootNodes = []string{
 		"enode://9bd46a41952da498b8101517a4dd78a97605a83b90d25d79f8204265ecd19e699ca9c37933c40f9bdac0f1145acde51aa26f8de223b6df58f8a652d7f66987be@52.14.103.190:30399",
+		"enode://2a989231e818ffc6ce28a0a1e76ff01b542a4a80cd2187cb1ae6cf76d23bc9383d2b61eba2b9dde932d6287770f6ee11807ed495b6a4bc02aaa9276f55a08239@52.14.16.38:30399",
 	}
 )
 
@@ -245,7 +246,7 @@ func livepeer(ctx *cli.Context) error {
 		injectBootnodes(stack.Server(), bootnodes)
 	} else {
 		if networkId == network.NetworkId {
-			injectBootnodes(stack.Server(), testbetBootNodes)
+			injectBootnodes(stack.Server(), toynetBootNodes)
 		}
 	}
 
