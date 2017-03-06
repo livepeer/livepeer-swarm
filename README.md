@@ -35,7 +35,7 @@ Now build the `livepeer` node from source
 ## Setup
 
 If you would like to simply connect to the Livepeer Toynet (test
-network with id=326), **no setup is necessary.** Simply run the command:
+network with id=326326), **no setup is necessary.** Simply run the command:
 
 `livepeer`
 
