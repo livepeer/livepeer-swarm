@@ -22,15 +22,20 @@ The Livepeer POC requires ffmpeg. On OSX:
 
 `brew install ffmpeg --with-ffplay`
 
-`git clone https://github.com/livepeer/go-ethereum.git`  
-`cd go-ethereum`  
-`go install ./cmd/geth`  
+or on Debian based Linux
+
+`apt-get install ffmpeg`
+
+Now build the `livepeer` node from source
+
+`git clone https://github.com/livepeer/go-livepeer`  
+`cd go-ethereum`   
 `go install ./cmd/livepeer`
 
 ## Setup
 
 If you would like to simply connect to the Livepeer Toynet (test
-network with id=326), **no setup is necessary.** Simply run the command:
+network with id=326326), **no setup is necessary.** Simply run the command:
 
 `livepeer`
 
@@ -39,8 +44,11 @@ with a password.
 
 If you would like to control where the data for Livepeer is stored,
 and which account is used in each data directory (you may want to do
-this if you're running multiple nodes), then create a new account in a
+this if you're running multiple nodes), then use `geth` from
+go-ethereum to create a new account in a
 new directory:
+
+(To build geth if you don't have it installed run `go install ./vendor/github.com/ethereum/go-ethereum/cmd/geth`)
 
 `geth --datadir <datadir>  account new`
 
@@ -127,12 +135,15 @@ Since this spike is built on top of Swarm and Ethereum, all the
 available functionality is exposed through this project. Please see
 the documentation at [the go-ethereum repository](http://github.com/ethereum/go-ethereum)
 
-### License from Go-Ethereum
+### License information for go-livepeer and go-ethereum
 
-The go-ethereum library (i.e. all code outside of the `cmd` directory) is licensed under the
+This repo is largely based on a fork of the go-ethereum
+codebase. The license and author information is included in `./vendor/github.com/ethereum/go-ethereum/`.
+
+The go-livepeer library (i.e. all code outside of the `cmd` directory) is licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html), also
 included in our repository in the `COPYING.LESSER` file.
 
-The go-ethereum binaries (i.e. all code inside of the `cmd` directory) is licensed under the
+The go-livepeer binaries (i.e. all code inside of the `cmd` directory) is licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also included
 in our repository in the `COPYING` file.

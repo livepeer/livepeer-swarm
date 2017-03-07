@@ -41,8 +41,9 @@ const (
 var (
 	gitCommit        string
 	app              = utils.NewApp(gitCommit, "Livepeer")
-	testbetBootNodes = []string{
-		"enode://9bd46a41952da498b8101517a4dd78a97605a83b90d25d79f8204265ecd19e699ca9c37933c40f9bdac0f1145acde51aa26f8de223b6df58f8a652d7f66987be@52.14.103.190:30399",
+	toynetBootNodes = []string{
+		"enode://fb4c232eb8ed424d513b3a9df229fe003629420f62041381ff5b560c0b69ad4e4c977cc475391295217a7e4b324d8303922989aa699956201f79412ec38247f0@52.14.103.190:30399",
+		"enode://5639b23de156e605eac5e169a44917767d3776f938a96bbdd0e26ef40235bc23b9c219d55ec3bbe84b4461659142e2f991fd994847ecb5179ca2c53db864ec0e@52.14.16.38:30399",
 	}
 )
 
@@ -124,7 +125,7 @@ var (
 	}
 	LivepeerNetworkIdFlag = cli.IntFlag{
 		Name:  "lpnetworkid",
-		Usage: "Network identifier (integer, default 326=livepeer toy net)",
+		Usage: "Network identifier (integer, default 326326=livepeer toy net)",
 		Value: network.NetworkId,
 	}
 )
@@ -245,7 +246,7 @@ func livepeer(ctx *cli.Context) error {
 		injectBootnodes(stack.Server(), bootnodes)
 	} else {
 		if networkId == network.NetworkId {
-			injectBootnodes(stack.Server(), testbetBootNodes)
+			injectBootnodes(stack.Server(), toynetBootNodes)
 		}
 	}
 
