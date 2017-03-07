@@ -23,12 +23,15 @@
             $("#btn-play-hls").click(function(){
                 var stream_id = $("#txt-stream-id").val();
                 var format = $('#r-video-format input:radio:checked').val();
-                // var url;
                 var conf;
                 if (format == "rtmp") {
+                    //This port calculation is dependent on the hard-coded logic in the go-livepeer
+                    //port calculation.  It's a hack now, and should be changed in the future.
+                    rtmpPortStr = query.host.split(":")[1]
+                    rtmpPort = parseInt(rtmpPortStr)-7000
                     conf = {
-                        src: "http://" + query.host + "/stream/" + stream_id + "",
-                        type: 'video/x-flv'
+                        src: "rtmp://localhost:" + rtmpPort + "/stream/" + stream_id,
+                        type: 'video/rtmp/flv'
                     };
                 }   
                 else if (format == "hls") {
@@ -94,7 +97,7 @@
         <button class="btn btn-primary" id="btn-play-hls"> 播放HLS </button>
     </div>-->
     <div class="form-inline">
-            <video id="livepeer-video" class="video-js vjs-default-skin" controls preload="auto" width="640" height="268" 
+            <video id="livepeer-video" class="video-js vjs-default-skin" controls preload="auto" width="640" height="360" 
             data-setup='{}'>
                 <!--<source src="http://localhost:8935/stream/133bd3c4e543e3cd53e2cf2b366eeeace7eae483b651b8b1e2a2072b250864fca9f3789535a6a1fd9db5c6869eaea3e79711648b4c2342a2132f825229bbd30f.m3u8"
                 type="application/vnd.apple.mpegURL">-->
