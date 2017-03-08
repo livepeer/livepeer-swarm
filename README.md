@@ -28,8 +28,9 @@ or on Debian based Linux
 
 Now build the `livepeer` node from source
 
+`go get github.com/livepeer/go-livepeer`   (this will clone the source into your $GOPATH/src/github.com/livepeer/go-livepeer. Or just clone it directly into your go path with:  
 `git clone https://github.com/livepeer/go-livepeer`  
-`cd go-livepeer`   
+`cd go-livepeer`   (full path above in reference to your $GOPATH)
 `go get ./...`  
 `go install ./cmd/livepeer`
 
