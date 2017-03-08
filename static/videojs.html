@@ -24,7 +24,9 @@
                 var stream_id = $("#txt-stream-id").val();
                 var format = $('#r-video-format input:radio:checked').val();
                 var conf;
-                if (format == "rtmp") {
+                if (stream_id == "") {
+                    console.log("Need to fill in stream_id first");
+                } else {
                     //This port calculation is dependent on the hard-coded logic in the go-livepeer
                     //port calculation.  It's a hack now, and should be changed in the future.
                     rtmpPortStr = query.host.split(":")[1]
@@ -33,15 +35,16 @@
                         src: "rtmp://localhost:" + rtmpPort + "/stream/" + stream_id,
                         type: 'video/rtmp/flv'
                     };
-                }   
-                else if (format == "hls") {
-                    conf = {
-                        src: "http://" + query.host + "/stream/" + stream_id + ".m3u8",
-                        type: 'application/x-mpegURL'
-                    };
-                } else {
-                    console.log("Invalid video format: " + format);
                 }
+                // }   
+                // else if (format == "hls") {
+                //     conf = {
+                //         src: "http://" + query.host + "/stream/" + stream_id + ".m3u8",
+                //         type: 'application/x-mpegURL'
+                //     };
+                // } else {
+                //     console.log("Invalid video format: " + format);
+                // }
 
                 var player = videojs('livepeer-video');
                 console.log(conf);
@@ -74,13 +77,13 @@
         Stream ID:
         <input type="text" id="txt-stream-id" class="input-xxlarge" value="">
     </div>
-    <div class="form-inline">
+    <!--<div class="form-inline">
         <div class="radio" id="r-video-format">
             Video Format:
             <label><input type="radio" name="videoformat" value="hls">HLS</label>
             <label><input type="radio" name="videoformat" value="rtmp">RTMP</label>
         </div>
-    </div>
+    </div>-->
     <div class="form-inline">
         <button class="btn btn-primary" id="btn-play-hls"> Play </button>
     </div>

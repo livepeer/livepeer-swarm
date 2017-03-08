@@ -105,10 +105,12 @@ second node (running on RTMP port 1936) using the livepeer command.
 To start a true livestream instead of playing a pre-recorded video, visit our web client or use a broadcasting
 platform such as OBS, and point the output at `rtmp://localhost:1935/movie`
 
+You can also use the web interface to test out streaming. To do that, make sure you are runing livepeer in the go-livepeer directory, and visit http://localhost:8935/. It should redirect you to http://localhost:8935/static/broadcast.html. Make sure the http port is your rtmp port +7000.
+
+
 ### Transcoding
 
-To enable transcoding, add `?transcode=true` in your RTMP uplink video.  For ease of testing, start SRS manually.  (So you can
-see the output).  To start srs, create a `./objs` directory, and run `./bin/srs -c srs.conf`
+Currently transcoding is an experimental feature.  Check out the [hls branch](https://github.com/livepeer/go-livepeer/tree/hls) for more informaiton.
 
 ## Metrics and monitoring
 
