@@ -26,11 +26,16 @@ or on Debian based Linux
 
 `apt-get install ffmpeg`
 
-Now build the `livepeer` node from source
+If you have never set up your Go programming environment, do so according to [Go's Getting Started Guide](https://golang.org/doc/install).
 
-`go get github.com/livepeer/go-livepeer`   (this will clone the source into your $GOPATH/src/github.com/livepeer/go-livepeer. Or just clone it directly into your go path with:  
-`git clone https://github.com/livepeer/go-livepeer`  
-`cd go-livepeer`   (full path above in reference to your $GOPATH)
+Now fetch and build the `livepeer` node using go.
+
+`go get github.com/livepeer/go-livepeer` 
+`go install github.com/livepeer/go-livepeer/cmd/livepeer`
+
+Or clone the repo and install the dependencies from source
+`git clone https://github.com/livepeer/go-livepeer`  (do this within your $GOPATH under the proper directory structure)
+`cd go-livepeer`  
 `go get ./...`  
 `go install ./cmd/livepeer`
 
