@@ -29,7 +29,8 @@ or on Debian based Linux
 Now build the `livepeer` node from source
 
 `git clone https://github.com/livepeer/go-livepeer`  
-`cd go-ethereum`   
+`cd go-livepeer`   
+`go get ./...`  
 `go install ./cmd/livepeer`
 
 ## Setup
@@ -83,12 +84,12 @@ port 1935. You can override this with the --rtmp option:
 or more control over the account, data directory, and network you
 connect to:
 
-`livepeer --bzzaccount $BZZKEY --datadir $DATADIR --ethapi $DATADIR/geth.ipc --lpnetworkid 412 --rtmp 1935`
+`livepeer --bzzaccount $BZZKEY --datadir $DATADIR --lpnetworkid 412 --rtmp 1935`
 
 To run a second node, so that you can test streaming to one another,
 specify a new `--port`, `--rtmp`, `--bzzport`, `--datadir`, and `--bzzaccount` argument:
 
-`livepeer --bzzaccount $BZZKEY2 --datadir $DATADIR2 --ethapi $DATADIR/geth.ipc --verbosity 4 --maxpeers 3 --port 30402 --lpnetworkid 412 --rtmp 1936`
+`livepeer --bzzaccount $BZZKEY2 --datadir $DATADIR2  --port 30402 --lpnetworkid 412 --bzzport 8502 --rtmp 1936`
 
 Now that you have two nodes running, make sure they are talking to
 each other, then stream into one node and play from the other.  You
