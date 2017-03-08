@@ -30,12 +30,13 @@ If you have never set up your Go programming environment, do so according to [Go
 
 Now fetch and build the `livepeer` node using go.
 
-`go get github.com/livepeer/go-livepeer` 
+`go get github.com/livepeer/go-livepeer`  
 `go install github.com/livepeer/go-livepeer/cmd/livepeer`
 
 Or clone the repo and install the dependencies from source
-`git clone https://github.com/livepeer/go-livepeer`  (do this within your $GOPATH under the proper directory structure)
-`cd go-livepeer`  
+
+`git clone https://github.com/livepeer/go-livepeer`  (do this within your $GOPATH under the proper directory structure)   
+`cd go-livepeer`   
 `go get ./...`  
 `go install ./cmd/livepeer`
 
