@@ -106,11 +106,13 @@ second node (running on RTMP port 1936) using the livepeer command.
 To start a true livestream instead of playing a pre-recorded video, visit our web client or use a broadcasting
 platform such as OBS, and point the output at `rtmp://localhost:1935/movie`
 
+You can also use the web interface to test out streaming.  To do that, make sure you are runing `livepeer` in the go-livepeer directory, and visit `http://localhost:8936/`.  It should redirect you to `http://localhost:8936/static/broadcast.html`.  Make sure the port is your rtmp port +7000.  
+
 ### Transcoding
 
-To enable transcoding, you need to send a broadcast request to the network with a RTMP ID.  The easiest way to do this is through the UI at localhost:port/static/broadcast.html.  Click on 'Broadcast' after you get a RTMP Video ID back for your RTMP stream. If the broadcast is successful, you will get a HLS Video ID back.  You can then use the HLS Video ID to view the stream (instead of using the RTMP Video ID).  
+To enable transcoding, you need to send a broadcast request to the network with a RTMP ID.  The easiest way to do this is through the UI at localhost:port/static/broadcast.html.  Click on 'Broadcast' after you get a RTMP Video ID back for your RTMP stream. If the broadcast is successful, you will get a HLS Video ID back.  You can then use the HLS Video ID to view the stream (instead of using the RTMP Video ID).
 
-For ease of testing, start SRS manually.  (So you can see the output).  To start srs, create a `./objs` directory, and run `./bin/srs-(osx|linux) -c srs.conf`.  Make sure srs.conf is configured correctly.  In particular, make sure your `listen` port is your rtmp port +500, `http_server/listen` port is your rtmp port +6000, and your `transcode/ffmpeg` is pointing to the right place.  For example, if I'm running my livepeer node on rtmp 1935, my `listen` should be 2435, and my `http_server/listen` should be 7935. I would also copy the output of `which ffmpeg` as my `transcode/ffmpeg`.  
+For this prototype, Livepeer relies on SRS from ossrs(https://github.com/ossrs/srs). For ease of testing, start SRS manually.  (So you can see the output).  To start srs, create a `./objs` directory, and run `./bin/srs-(osx|linux) -c srs.conf`.  Make sure srs.conf is configured correctly.  In particular, make sure your `listen` port is your rtmp port +500, `http_server/listen` port is your rtmp port +6000, and your `transcode/ffmpeg` is pointing to the right place.  For example, if I'm running my livepeer node on rtmp 1935, my `listen` should be 2435, and my `http_server/listen` should be 7935. I would also copy the output of `which ffmpeg` as my `transcode/ffmpeg`.  
 
 If your srs setup is working, you should see output in the srs prompt as you are streaming video.  Note you may have to wait for a while for the video to buffer before the first HLS segment is ready.  It's typically 30-60 seconds on my local computer.
 
