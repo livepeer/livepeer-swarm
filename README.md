@@ -1,6 +1,6 @@
 ## LivePeer
 
-Livepeer is a decentralized live streaming broadcast platform. This
+[Livepeer](https://livepeer.org) is a decentralized live streaming broadcast platform. This
 repo is a proof-of-concept spike built on top of Swarm and 
 [go-ethereum](https://github.com/ethereum/go-ethereum) developed by
 the [Ethereum Foundation](http://ethereum.org).
