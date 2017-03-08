@@ -107,8 +107,7 @@ platform such as OBS, and point the output at `rtmp://localhost:1935/movie`
 
 ### Transcoding
 
-To enable transcoding, add `?transcode=true` in your RTMP uplink video.  For ease of testing, start SRS manually.  (So you can
-see the output).  To start srs, create a `./objs` directory, and run `./bin/srs -c srs.conf`
+Currently transcoding is an experimental feature.  Check out the [hls branch](https://github.com/livepeer/go-livepeer/tree/hls) for more informaiton.
 
 ## Metrics and monitoring
 
