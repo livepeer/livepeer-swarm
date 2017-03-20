@@ -2,7 +2,9 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
@@ -16,14 +18,118 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
 	"github.com/golang/groupcache/lru"
 	"github.com/kz26/m3u8"
+	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
 	lpmsCommon "github.com/livepeer/go-livepeer/lpms/common"
 	"github.com/livepeer/go-livepeer/lpms/types"
 	"github.com/nareix/joy4/av"
 	joy4rtmp "github.com/nareix/joy4/format/rtmp"
 )
+
+type VideoFormat uint8
+
+const (
+	RTMP = VideoFormat(iota + 1) // 8-bit unsigned integer
+	HLS
+)
+
+// type Packet interface {
+// 	Format() VideoFormat
+// 	Serialize(p Packet) ([]byte, error)
+// 	Deserialize(in []byte) error
+// }
+
+// func (self *RTMPPacket) Format() VideoFormat {
+// 	return RTMP
+// }
+
+// func (self *RTMPPacket) Serialize() ([]byte, error) {
+// 	b := bytes.Buffer{}
+// 	e := gob.NewEncoder(&b)
+// 	err := e.Encode(self)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return b.Bytes(), nil
+// }
+
+// func (self *RTMPPacket) Deserialize(in []byte) error {
+// 	b := bytes.Buffer{}
+// 	b.Write(in)
+// 	d := gob.NewDecoder(&b)
+// 	err := d.Decode(self)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
+
+type HLSPacket struct {
+	Name string
+	Data []byte
+}
+
+func (self *HLSPacket) Format() VideoFormat {
+	return HLS
+}
+
+func (self *HLSPacket) Serialize() ([]byte, error) {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	err := e.Encode(self)
+	if err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+func (self *HLSPacket) deserialize(in []byte) error {
+	b := bytes.Buffer{}
+	b.Write(in)
+	d := gob.NewDecoder(&b)
+	err := d.Decode(self)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type StreamRequest struct {
+}
+
+type HLSStream struct {
+	HLSPlaylist m3u8.Playlist
+	HLSSegment  map[string]m3u8.MediaSegment
+}
+
+func (self *HLSStream) ReadSegment(segName string) (m3u8.MediaSegment, error) {
+	return m3u8.MediaSegment{}, nil
+}
+
+func (self *HLSStream) WriteSegment(segnemt m3u8.MediaSegment) error {
+	return nil
+}
+
+func (self *HLSStream) ReadHlsPlaylist() (m3u8.MediaPlaylist, error) {
+	return m3u8.MediaPlaylist{}, nil
+}
+
+func (self *HLSStream) WriteHlsPlaylist(m3u8.MediaPlaylist) error {
+	return nil
+}
+
+func (self *HLSStream) WriteStream(ctx context.Context, input Stream) error {
+	return nil
+}
+
+func (self *HLSStream) ReadStream(ctx context.Context, output Stream) error {
+	return nil
+}
+
+func (self *HLSStream) Close() error {
+	return nil
+}
 
 func CopyChannelToChannel(inChan chan *streaming.VideoChunk, outChan chan *streaming.VideoChunk) {
 	for {

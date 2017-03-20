@@ -347,3 +347,5 @@ type Info struct {
 func (self *Info) Info() *Info {
 	return self
 }
+
+type LivepeerNode struct{}
