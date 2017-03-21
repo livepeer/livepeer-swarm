@@ -1,11 +1,12 @@
 package io
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"errors"
 	"io"
+	"reflect"
+
+	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -15,75 +16,79 @@ import (
 var ErrBufferFull = errors.New("Stream Buffer Full")
 var ErrBufferEmpty = errors.New("Stream Buffer Empty")
 var ErrBufferItemType = errors.New("Buffer Item Type Not Recognized")
+var ErrDroppedRTMPStream = errors.New("RTMP Stream Stopped Without EOF")
 
-type BufferItemType uint8
+type RTMPEOF struct{}
 
-const (
-	RTMPHeader = BufferItemType(iota + 1) // 8-bit unsigned integer
-	RTMPPacket
-	RTMPEOF
-	HLSPlaylist
-	HLSSegment
-)
-
-type LPMSBuffer interface {
-	Push(in []byte) error
-	Pop() ([]byte, error)
+type streamBuffer struct {
+	q *Queue
 }
 
-type StreamBuffer struct {
-	Len int32
+func newStreamBuffer() *streamBuffer {
+	return &streamBuffer{q: NewQueue(1000)}
 }
 
-type BufferItem struct {
-	Type BufferItemType
-	Data interface{}
-}
-
-func (b *StreamBuffer) Push(in []byte) error {
-	// fmt.Println("push", in)
-	b.Len = b.Len + 1
+func (b *streamBuffer) push(in interface{}) error {
+	b.q.Put(in)
 	return nil
 }
 
-func (b *StreamBuffer) Pop() ([]byte, error) {
-	if b.Len == 0 {
-		return nil, ErrBufferEmpty
+func (b *streamBuffer) poll(wait time.Duration) (interface{}, error) {
+	results, err := b.q.Poll(1, wait)
+	if err != nil {
+		return nil, err
 	}
-	b.Len = b.Len - 1
-	return nil, nil
+	result := results[0]
+	return result, nil
+}
+
+func (b *streamBuffer) pop() (interface{}, error) {
+	results, err := b.q.Get(1)
+	if err != nil {
+		return nil, err
+	}
+	result := results[0]
+	return result, nil
+}
+
+func (b *streamBuffer) len() int64 {
+	return b.q.Len()
 }
 
 type Stream struct {
-	Buffer   LPMSBuffer
-	StreamID string
-	// StreamFormat io.Format
+	StreamID    string
+	RTMPTimeout time.Duration
+	buffer      *streamBuffer
+}
+
+func (s *Stream) Len() int64 {
+	return s.buffer.len()
+}
+
+func NewStream(id string) *Stream {
+	return &Stream{buffer: newStreamBuffer(), StreamID: id}
 }
 
 //ReadRTMPFromStream reads the content from the RTMP stream out into the dst.
 func (s *Stream) ReadRTMPFromStream(ctx context.Context, dst av.MuxCloser) error {
 	defer dst.Close()
 
-	//TODO: Put this for loop in a go routine and handle errors through a channel
 	for {
-		bytes, err := s.Buffer.Pop()
+		item, err := s.buffer.poll(s.RTMPTimeout)
 		if err != nil {
 			return err
 		}
 
-		bufferItem, err := Deserialize(bytes)
-		// fmt.Println("item: ", bufferItem)
-		switch bufferItem.Type {
-		case RTMPHeader:
-
-			headers := bufferItem.Data.([]av.CodecData)
+		switch item.(type) {
+		case []av.CodecData:
+			headers := item.([]av.CodecData)
 			err = dst.WriteHeader(headers)
 			if err != nil {
 				glog.V(logger.Error).Infof("Error writing RTMP header from Stream %v to mux", s.StreamID)
 				return err
 			}
-		case RTMPPacket:
-			packet := bufferItem.Data.(av.Packet)
+		case av.Packet:
+			packet := item.(av.Packet)
 			err = dst.WritePacket(packet)
 			if err != nil {
 				glog.V(logger.Error).Infof("Error writing RTMP packet from Stream %v to mux", s.StreamID)
@@ -97,7 +102,7 @@ func (s *Stream) ReadRTMPFromStream(ctx context.Context, dst av.MuxCloser) error
 			}
 			return io.EOF
 		default:
-			glog.V(logger.Error).Infof("Cannot recognize buffer iteam type: ", bufferItem.Type)
+			glog.V(logger.Error).Infof("Cannot recognize buffer iteam type: ", reflect.TypeOf(item))
 			return ErrBufferItemType
 		}
 	}
@@ -114,12 +119,7 @@ func (s *Stream) WriteRTMPToStream(ctx context.Context, src av.DemuxCloser) erro
 			if err != nil {
 				return err
 			}
-			headerBytes, err := Serialize(&BufferItem{Type: RTMPHeader, Data: header})
-			if err != nil {
-				return err
-			}
-			err = s.Buffer.Push(headerBytes)
-			// fmt.Println("pushing header", headerBytes)
+			err = s.buffer.push(header)
 			if err != nil {
 				return err
 			}
@@ -128,24 +128,21 @@ func (s *Stream) WriteRTMPToStream(ctx context.Context, src av.DemuxCloser) erro
 			for {
 				packet, err := src.ReadPacket()
 				if err == io.EOF {
-					//TODO: Push EOF Packet
+					s.buffer.push(RTMPEOF{})
 					return err
 				} else if err != nil {
 					return err
+				} else if len(packet.Data) == 0 { //TODO: Investigate if it's possible for packet to be nil (what happens when RTMP stopped publishing because of a dropped connection? Is it possible to have err and packet both nil?)
+					return ErrDroppedRTMPStream
 				}
 
 				if packet.IsKeyFrame {
 					// lastKeyframe = packet
 				}
 
-				packetBytes, err := Serialize(&BufferItem{Type: RTMPPacket, Data: packet})
-				if err != nil {
-					return err
-				}
-				err = s.Buffer.Push(packetBytes)
-				// fmt.Println("pushing packet", packetBytes)
+				err = s.buffer.push(packet)
 				if err == ErrBufferFull {
-					//Delete all packets until last keyframe, insert headers in front - trying to get rid of streaming artifacts.
+					//TODO: Delete all packets until last keyframe, insert headers in front - trying to get rid of streaming artifacts.
 				}
 			}
 		}()
@@ -161,31 +158,31 @@ func (s *Stream) WriteRTMPToStream(ctx context.Context, src av.DemuxCloser) erro
 }
 
 //Serialize converts BufferItem into []byte, so it can be put on the wire.
-func Serialize(bi *BufferItem) ([]byte, error) {
-	// gob.Register(map[string]interface{}{})
-	gob.Register([]av.CodecData{})
-	gob.Register(av.Packet{})
-	b := bytes.Buffer{}
-	e := gob.NewEncoder(&b)
-	err := e.Encode(bi)
-	if err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
-}
+// func Serialize(bi *BufferItem) ([]byte, error) {
+// 	// gob.Register(map[string]interface{}{})
+// 	gob.Register([]av.CodecData{})
+// 	gob.Register(av.Packet{})
+// 	b := bytes.Buffer{}
+// 	e := gob.NewEncoder(&b)
+// 	err := e.Encode(bi)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return b.Bytes(), nil
+// }
 
-//Deserialize converts []byte into BufferItem
-func Deserialize(in []byte) (*BufferItem, error) {
-	bi := &BufferItem{}
-	b := bytes.Buffer{}
-	b.Write(in)
-	d := gob.NewDecoder(&b)
-	err := d.Decode(bi)
-	if err != nil {
-		return bi, err
-	}
-	return bi, nil
-}
+// //Deserialize converts []byte into BufferItem
+// func Deserialize(in []byte) (*BufferItem, error) {
+// 	bi := &BufferItem{}
+// 	b := bytes.Buffer{}
+// 	b.Write(in)
+// 	d := gob.NewDecoder(&b)
+// 	err := d.Decode(bi)
+// 	if err != nil {
+// 		return bi, err
+// 	}
+// 	return bi, nil
+// }
 
 // type Stream interface {
 // 	Muxer

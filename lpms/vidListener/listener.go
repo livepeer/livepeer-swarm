@@ -1,4 +1,4 @@
-package vidListener
+package vidlistener
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type VidListener struct {
 }
 
 func (s *VidListener) HandleRTMPPublish(
-	getStreamID func(streamID chan<- string) error,
+	getStreamID func(reqPath string, streamID chan<- string) error,
 	stream func(ctx context.Context, reqPath string, demux av.DemuxCloser) error) error {
 
 	s.RtmpServer.HandlePublish = func(conn *joy4rtmp.Conn) {
@@ -30,7 +30,7 @@ func (s *VidListener) HandleRTMPPublish(
 		c := make(chan error, 1)
 		streamIDChan := make(chan string, 1)
 		var streamID string
-		go func() { c <- getStreamID(streamIDChan) }()
+		go func() { c <- getStreamID(conn.URL.Path, streamIDChan) }()
 		select {
 		case id := <-streamIDChan:
 			streamID = id

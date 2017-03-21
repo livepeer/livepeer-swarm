@@ -1,4 +1,4 @@
-package vidListener
+package vidlistener
 
 import (
 	"context"
@@ -45,7 +45,7 @@ func TestRTMPWithServer(t *testing.T) {
 	server := &joy4rtmp.Server{Addr: ":1936"}
 	listener := &VidListener{RtmpServer: server, Streams: make(map[string]LocalStream)}
 	listener.HandleRTMPPublish(
-		func(streamID chan<- string) error {
+		func(reqPath string, streamID chan<- string) error {
 			streamID <- "teststream"
 			return nil
 		},

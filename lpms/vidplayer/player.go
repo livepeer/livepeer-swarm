@@ -15,7 +15,7 @@ import (
 
 //VidPlayer is the module that handles playing video. For now we only support RTMP and HLS play.
 type VidPlayer struct {
-	rtmpServer *joy4rtmp.Server
+	RtmpServer *joy4rtmp.Server
 	// httpServer *http
 	// demuxer    av.Demuxer
 }
@@ -23,7 +23,7 @@ type VidPlayer struct {
 //HandleRTMPPlay is the handler when there is a RTMP request for a video. The source should write
 //into the MuxCloser. The easiest way is through avutil.Copy.
 func (s *VidPlayer) HandleRTMPPlay(getStream func(ctx context.Context, reqPath string, dst av.MuxCloser) error) error {
-	s.rtmpServer.HandlePlay = func(conn *joy4rtmp.Conn) {
+	s.RtmpServer.HandlePlay = func(conn *joy4rtmp.Conn) {
 		glog.V(logger.Info).Infof("LPMS got RTMP request @ %v", conn.URL)
 
 		ctx := context.Background()

@@ -34,36 +34,7 @@ const (
 	HLS
 )
 
-// type Packet interface {
-// 	Format() VideoFormat
-// 	Serialize(p Packet) ([]byte, error)
-// 	Deserialize(in []byte) error
-// }
-
-// func (self *RTMPPacket) Format() VideoFormat {
-// 	return RTMP
-// }
-
-// func (self *RTMPPacket) Serialize() ([]byte, error) {
-// 	b := bytes.Buffer{}
-// 	e := gob.NewEncoder(&b)
-// 	err := e.Encode(self)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return b.Bytes(), nil
-// }
-
-// func (self *RTMPPacket) Deserialize(in []byte) error {
-// 	b := bytes.Buffer{}
-// 	b.Write(in)
-// 	d := gob.NewDecoder(&b)
-// 	err := d.Decode(self)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
+// NewEncoder
 
 type HLSPacket struct {
 	Name string

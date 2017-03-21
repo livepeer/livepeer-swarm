@@ -6,6 +6,8 @@ import (
 	"io"
 	"testing"
 
+	"time"
+
 	"github.com/nareix/joy4/av"
 )
 
@@ -17,16 +19,38 @@ type BadStreamsDemuxer struct{}
 
 func (d BadStreamsDemuxer) Close() error                     { return nil }
 func (d BadStreamsDemuxer) Streams() ([]av.CodecData, error) { return nil, ErrStreams }
-func (d BadStreamsDemuxer) ReadPacket() (av.Packet, error)   { return av.Packet{}, nil }
+func (d BadStreamsDemuxer) ReadPacket() (av.Packet, error)   { return av.Packet{Data: []byte{0, 0}}, nil }
 
 type BadPacketsDemuxer struct{}
 
 func (d BadPacketsDemuxer) Close() error                     { return nil }
 func (d BadPacketsDemuxer) Streams() ([]av.CodecData, error) { return nil, nil }
-func (d BadPacketsDemuxer) ReadPacket() (av.Packet, error)   { return av.Packet{}, ErrPacketRead }
+func (d BadPacketsDemuxer) ReadPacket() (av.Packet, error) {
+	return av.Packet{Data: []byte{0, 0}}, ErrPacketRead
+}
+
+type NoEOFDemuxer struct {
+	c *Counter
+}
+
+type Counter struct {
+	Count int
+}
+
+func (d NoEOFDemuxer) Close() error                     { return nil }
+func (d NoEOFDemuxer) Streams() ([]av.CodecData, error) { return nil, nil }
+func (d NoEOFDemuxer) ReadPacket() (av.Packet, error) {
+	if d.c.Count == 10 {
+		return av.Packet{}, nil
+	}
+
+	d.c.Count = d.c.Count + 1
+	return av.Packet{Data: []byte{0}}, nil
+}
 
 func TestWriteRTMPErrors(t *testing.T) {
-	stream := Stream{Buffer: &StreamBuffer{}, StreamID: "test"}
+	// stream := Stream{Buffer: &StreamBuffer{}, StreamID: "test"}
+	stream := NewStream("test")
 	err := stream.WriteRTMPToStream(context.Background(), BadStreamsDemuxer{})
 	if err != ErrStreams {
 		t.Error("Expecting Streams Error, but got: ", err)
@@ -36,6 +60,11 @@ func TestWriteRTMPErrors(t *testing.T) {
 	if err != ErrPacketRead {
 		t.Error("Expecting Packet Read Error, but got: ", err)
 	}
+
+	err = stream.WriteRTMPToStream(context.Background(), NoEOFDemuxer{c: &Counter{Count: 0}})
+	if err != ErrDroppedRTMPStream {
+		t.Error("Expecting RTMP Dropped Error, but got: ", err)
+	}
 }
 
 //Testing WriteRTMP
@@ -43,63 +72,31 @@ type PacketsDemuxer struct {
 	c *Counter
 }
 
-type Counter struct {
-	Count int
-}
-
 func (d PacketsDemuxer) Close() error                     { return nil }
 func (d PacketsDemuxer) Streams() ([]av.CodecData, error) { return nil, nil }
 func (d PacketsDemuxer) ReadPacket() (av.Packet, error) {
 	if d.c.Count == 10 {
-		return av.Packet{}, io.EOF
-	} else {
-		d.c.Count = d.c.Count + 1
-		return av.Packet{}, nil
+		return av.Packet{Data: []byte{0, 0}}, io.EOF
 	}
+
+	d.c.Count = d.c.Count + 1
+	return av.Packet{Data: []byte{0, 0}}, nil
 }
 
 func TestWriteRTMP(t *testing.T) {
-	stream := Stream{Buffer: &StreamBuffer{Len: 0}, StreamID: "test"}
+	// stream := Stream{Buffer: NewStreamBuffer(), StreamID: "test"}
+	stream := NewStream("test")
 	err := stream.WriteRTMPToStream(context.Background(), PacketsDemuxer{c: &Counter{Count: 0}})
 
 	if err != io.EOF {
 		t.Error("Expecting EOF, but got: ", err)
 	}
 
-	if stream.Buffer.(*StreamBuffer).Len != 11 { //10 packets, 1 header
-		t.Error("Expecting buffer length to be 11, but got: ", stream.Buffer.(*StreamBuffer).Len)
+	if stream.Len() != 12 { //10 packets, 1 header, 1 trailer
+		t.Error("Expecting buffer length to be 11, but got: ", stream.Len())
 	}
 
-}
-
-//Test ReadRTMP Errors
-type FakeStreamBuffer struct {
-	c *Counter
-}
-
-func (b *FakeStreamBuffer) Push(in []byte) error { return nil }
-func (b *FakeStreamBuffer) Pop() ([]byte, error) {
-	// fmt.Println("pop, count:", b.c.Count)
-	switch b.c.Count {
-	case 10:
-		b.c.Count = b.c.Count - 1
-		i := &BufferItem{Type: RTMPHeader, Data: []av.CodecData{}}
-		h, _ := Serialize(i)
-		return h, nil
-	case 0:
-		return nil, ErrBufferEmpty
-	default:
-		b.c.Count = b.c.Count - 1
-		i := &BufferItem{Type: RTMPPacket, Data: av.Packet{}}
-		// fmt.Println("item before: ", i)
-		p, _ := Serialize(i)
-		// i, err := Deserialize(p)
-		// if err != nil {
-		// 	fmt.Println(err)
-		// }
-		// fmt.Println("item after: ", i)
-		return p, nil
-	}
+	//TODO: Test what happens when the buffer is full (should evict everything before the last keyframe)
 }
 
 var ErrBadHeader = errors.New("BadHeader")
@@ -120,8 +117,12 @@ func (d BadPacketMuxer) WriteTrailer() error              { return nil }
 func (d BadPacketMuxer) WritePacket(av.Packet) error      { return ErrBadPacket }
 
 func TestReadRTMPError(t *testing.T) {
-	stream := Stream{Buffer: &FakeStreamBuffer{c: &Counter{Count: 10}}, StreamID: "test"}
-	err := stream.ReadRTMPFromStream(context.Background(), BadHeaderMuxer{})
+	stream := NewStream("test")
+	err := stream.WriteRTMPToStream(context.Background(), PacketsDemuxer{c: &Counter{Count: 0}})
+	if err != io.EOF {
+		t.Error("Error setting up the test - while inserting packet.")
+	}
+	err = stream.ReadRTMPFromStream(context.Background(), BadHeaderMuxer{})
 
 	if err != ErrBadHeader {
 		t.Error("Expecting bad header error, but got ", err)
@@ -134,7 +135,6 @@ func TestReadRTMPError(t *testing.T) {
 }
 
 //Test ReadRTMP
-
 type PacketsMuxer struct{}
 
 func (d PacketsMuxer) Close() error                     { return nil }
@@ -143,15 +143,55 @@ func (d PacketsMuxer) WriteTrailer() error              { return nil }
 func (d PacketsMuxer) WritePacket(av.Packet) error      { return nil }
 
 func TestReadRTMP(t *testing.T) {
-	fakeBuffer := &FakeStreamBuffer{c: &Counter{Count: 10}}
-	stream := Stream{Buffer: fakeBuffer, StreamID: "test"}
-	err := stream.ReadRTMPFromStream(context.Background(), PacketsMuxer{})
+	stream := NewStream("test")
+	err := stream.WriteRTMPToStream(context.Background(), PacketsDemuxer{c: &Counter{Count: 0}})
+	if err != io.EOF {
+		t.Error("Error setting up the test - while inserting packet.")
+	}
+	readErr := stream.ReadRTMPFromStream(context.Background(), PacketsMuxer{})
 
-	if err != ErrBufferEmpty {
+	if readErr != io.EOF {
 		t.Error("Expecting buffer to be empty, but got ", err)
 	}
 
-	if fakeBuffer.c.Count != 0 {
-		t.Error("Expecting buffer length to be 0, but got ", fakeBuffer.c.Count)
+	if stream.Len() != 0 {
+		t.Error("Expecting buffer length to be 0, but got ", stream.Len())
+	}
+
+	stream2 := NewStream("test2")
+	stream2.RTMPTimeout = time.Millisecond * 50
+	err2 := stream.WriteRTMPToStream(context.Background(), NoEOFDemuxer{c: &Counter{Count: 0}})
+	if err2 != ErrDroppedRTMPStream {
+		t.Error("Error setting up the test - while inserting packet.")
+	}
+	err2 = stream2.ReadRTMPFromStream(context.Background(), PacketsMuxer{})
+	if err2 != ErrTimeout {
+		t.Error("Expecting timeout, but got", err2)
 	}
 }
+
+// //Test ReadRTMP Errors
+// type FakeStreamBuffer struct {
+// 	c *Counter
+// }
+
+// func (b *FakeStreamBuffer) Push(in interface{}) error { return nil }
+// func (b *FakeStreamBuffer) Pop() (interface{}, error) {
+// 	// fmt.Println("pop, count:", b.c.Count)
+// 	switch b.c.Count {
+// 	case 10:
+// 		b.c.Count = b.c.Count - 1
+// 		// i := &BufferItem{Type: RTMPHeader, Data: []av.CodecData{}}
+// 		// h, _ := Serialize(i)
+// 		// return h, nil
+// 		return []av.CodecData{}, nil
+// 	case 0:
+// 		return nil, ErrBufferEmpty
+// 	default:
+// 		b.c.Count = b.c.Count - 1
+// 		// i := &BufferItem{Type: RTMPPacket, Data: av.Packet{}}
+// 		// p, _ := Serialize(i)
+// 		// return p, nil
+// 		return av.Packet{}, nil
+// 	}
+// }
