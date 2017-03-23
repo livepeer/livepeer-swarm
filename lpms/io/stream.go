@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/kz26/m3u8"
 	"github.com/nareix/joy4/av"
 )
 
@@ -17,6 +18,7 @@ var ErrBufferFull = errors.New("Stream Buffer Full")
 var ErrBufferEmpty = errors.New("Stream Buffer Empty")
 var ErrBufferItemType = errors.New("Buffer Item Type Not Recognized")
 var ErrDroppedRTMPStream = errors.New("RTMP Stream Stopped Without EOF")
+var ErrHttpReqFailed = errors.New("Http Request Failed")
 
 type RTMPEOF struct{}
 
@@ -55,9 +57,15 @@ func (b *streamBuffer) len() int64 {
 	return b.q.Len()
 }
 
+type HLSSegment struct {
+	Name string
+	Data []byte
+}
+
 type Stream struct {
 	StreamID    string
 	RTMPTimeout time.Duration
+	HLSTimeout  time.Duration
 	buffer      *streamBuffer
 }
 
@@ -73,6 +81,7 @@ func NewStream(id string) *Stream {
 func (s *Stream) ReadRTMPFromStream(ctx context.Context, dst av.MuxCloser) error {
 	defer dst.Close()
 
+	//TODO: Make sure to listen to ctx.Done()
 	for {
 		item, err := s.buffer.poll(s.RTMPTimeout)
 		if err != nil {
@@ -156,6 +165,94 @@ func (s *Stream) WriteRTMPToStream(ctx context.Context, src av.DemuxCloser) erro
 		return err
 	}
 }
+
+func (s *Stream) WriteHLSPlaylistToStream(pl m3u8.MediaPlaylist) error {
+	return s.buffer.push(pl)
+}
+
+func (s *Stream) WriteHLSSegmentToStream(seg HLSSegment) error {
+	return s.buffer.push(seg)
+}
+
+//ReadHLSFromStream reads an HLS stream into an HLSBuffer
+func (s *Stream) ReadHLSFromStream(buffer HLSMuxer) error {
+	for {
+		item, err := s.buffer.poll(s.HLSTimeout)
+		if err != nil {
+			return err
+		}
+
+		switch item.(type) {
+		case m3u8.MediaPlaylist:
+			buffer.WritePlaylist(item.(m3u8.MediaPlaylist))
+		case HLSSegment:
+			buffer.WriteSegment(item.(HLSSegment).Name, item.(HLSSegment).Data)
+		default:
+			return ErrBufferItemType
+		}
+	}
+	return nil
+}
+
+//WriteHLSToStream puts a video stream from a HLS demuxer into a stream.  This method does NOT check the validity of the
+//video stream itself.  So there is NO guarentee that the playlist will match the segments.  It simply puts everything into a buffer queue.
+//THIS MIGHT NOT BE USEFUL!!!
+// func (s *Stream) WriteHLSToStream(ctx context.Context, hlsDemux HLSDemuxer) error { // playlistUrl string) error {
+// 	pec := make(chan error)
+// 	go func() {
+// 		pec <- func() error {
+// 			for {
+// 				pl, err := hlsDemux.WaitAndPopPlaylist(ctx)
+// 				if err != nil {
+// 					return err
+// 				}
+// 				s.WriteHLSPlaylistToStream(pl)
+// 			}
+// 		}()
+// 	}()
+
+// 	sec := make(chan error)
+// 	go func() {
+// 		sec <- func() error {
+// 			for {
+// 				pl, err := hlsDemux.WaitAndPopSegment(ctx, "")
+// 				if err != nil {
+// 					return err
+// 				}
+// 				s.WriteHLSPlaylistToStream(pl)
+// 			}
+// 		}()
+// 	}()
+
+// 	return nil
+// pe := make(chan error, 1)
+// se := make(chan error, 1)
+// playlistChan := make(chan m3u8.MediaPlaylist, 1)
+// segmentChan := make(chan []byte)
+// // context.WithValue
+// // cancel := context.CancelFunc(ctx)
+
+// go func() { pe <- hlsDemux.PollPlaylist(ctx, playlistChan) }()
+// go func() { se <- hlsDemux.PollSegment(ctx, segmentChan) }()
+
+// for {
+// 	select {
+// 	case perr := <-pe:
+// 		glog.V(logger.Error).Infof("Stream HLS Write Error On Playlist: %v, %v", s.StreamID, perr)
+// 		return perr
+// 	case serr := <-se:
+// 		glog.V(logger.Error).Infof("Stream HLS Write Error on Segment: %v, %v", s.StreamID, serr)
+// 		return serr
+// 	case playlist := <-playlistChan:
+// 		s.buffer.push(playlist)
+// 	case segment := <-segmentChan:
+// 		s.buffer.push(segment)
+// 	case <-ctx.Done():
+// 		glog.V(logger.Error).Infof("Stream HLS Write Killed: %v, %v", s.StreamID, ctx.Err())
+// 		return ctx.Err()
+// 	}
+// }
+// }
 
 //Serialize converts BufferItem into []byte, so it can be put on the wire.
 // func Serialize(bi *BufferItem) ([]byte, error) {

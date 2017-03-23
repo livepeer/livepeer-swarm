@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"runtime"
 	"testing"
 
 	"time"
 
+	"github.com/kz26/m3u8"
 	"github.com/nareix/joy4/av"
 )
 
@@ -93,8 +95,10 @@ func TestWriteRTMP(t *testing.T) {
 	}
 
 	if stream.Len() != 12 { //10 packets, 1 header, 1 trailer
-		t.Error("Expecting buffer length to be 11, but got: ", stream.Len())
+		t.Error("Expecting buffer length to be 12, but got: ", stream.Len())
 	}
+
+	// fmt.Println(stream.buffer.q.Get(12))
 
 	//TODO: Test what happens when the buffer is full (should evict everything before the last keyframe)
 }
@@ -169,6 +173,156 @@ func TestReadRTMP(t *testing.T) {
 		t.Error("Expecting timeout, but got", err2)
 	}
 }
+
+func TestWriteHLS(t *testing.T) {
+	stream := NewStream("test")
+	err1 := stream.WriteHLSPlaylistToStream(m3u8.MediaPlaylist{})
+	err2 := stream.WriteHLSSegmentToStream(HLSSegment{})
+	if err1 != nil {
+		t.Error("Shouldn't be error writing playlist, but got:", err1)
+	}
+	if err2 != nil {
+		t.Error("Shouldn't be error writing segment, but got:", err2)
+	}
+	if stream.buffer.len() != 2 {
+		t.Error("Should have 2 packet, but got:", stream.buffer.len())
+	}
+}
+
+// struct TestHLSBuffer struct{}
+// func (b *TestHLSBuffer) WritePlaylist(m3u8.MediaPlaylist) error {
+
+// }
+
+// func (b *TestHLSBuffer) WriteSegment(name string, s []byte) error {
+
+// }
+
+func TestReadHLS(t *testing.T) {
+	stream := NewStream("test")
+	stream.HLSTimeout = time.Millisecond * 100
+	buffer := NewHLSBuffer()
+	grBefore := runtime.NumGoroutine()
+	stream.WriteHLSPlaylistToStream(m3u8.MediaPlaylist{SeqNo: 100})
+	for i := 0; i < 9; i++ {
+		stream.WriteHLSSegmentToStream(HLSSegment{Name: "test" + string(i), Data: []byte{0}})
+	}
+
+	ec := make(chan error, 1)
+	go func() { ec <- stream.ReadHLSFromStream(buffer) }()
+
+	time.Sleep(time.Millisecond * 100)
+	if buffer.sq.Count() != 9 {
+		t.Error("Should have 9 packets in the buffer, but got:", buffer.sq.Count())
+	}
+
+	if buffer.plCache.SeqNo != 100 {
+		t.Error("Should have inserted a playlist with SeqNo of 100")
+	}
+
+	time.Sleep(time.Millisecond * 100)
+	grAfter := runtime.NumGoroutine()
+	if grBefore != grAfter {
+		t.Errorf("Should have %v Go routines, but have %v", grBefore, grAfter)
+	}
+}
+
+// type GoodHLSDemux struct{}
+
+// func (d GoodHLSDemux) WaitAndPopPlaylist(ctx context.Context) (m3u8.MediaPlaylist, error) {
+// 	return m3u8.MediaPlaylist{}, nil
+// for i := 0; i < 2; i++ {
+// 	pc <- m3u8.MediaPlaylist{}
+// 	time.Sleep(time.Millisecond * 50)
+// }
+
+// select {
+// case <-ctx.Done():
+// 	return ctx.Err()
+// }
+// }
+// func (d GoodHLSDemux) WaitAndGetSegment(ctx context.Context, name string) ([]byte, error) {
+// 	return nil, nil
+// }
+
+// func (d GoodHLSDemux) PollPlaylist(ctx context.Context, pc chan m3u8.MediaPlaylist) error {
+// 	for i := 0; i < 2; i++ {
+// 		pc <- m3u8.MediaPlaylist{}
+// 		time.Sleep(time.Millisecond * 50)
+// 	}
+
+// 	select {
+// 	case <-ctx.Done():
+// 		return ctx.Err()
+// 	}
+// }
+
+// func (d GoodHLSDemux) PollSegment(ctx context.Context, sc chan m3u8.MediaSegment) error {
+// 	for i := 0; i < 4; i++ {
+// 		sc <- m3u8.MediaSegment{}
+// 		time.Sleep(time.Millisecond * 50)
+// 	}
+
+// 	return io.EOF
+// }
+
+// func TestWriteHLS(t *testing.T) {
+// 	stream := NewStream("test")
+// 	numGR := runtime.NumGoroutine()
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	err := stream.WriteHLSToStream(ctx, GoodHLSDemux{})
+// 	cancel()
+
+// 	if err != io.EOF {
+// 		t.Error("Expecting EOF, but got:", err)
+// 	}
+
+// 	if stream.buffer.len() != 6 {
+// 		t.Error("Expecting 6 packets in buffer, but got:", stream.buffer.len())
+// 	}
+
+// 	time.Sleep(time.Millisecond * 100)
+// 	if numGR != runtime.NumGoroutine() {
+// 		t.Errorf("NumGoroutine not equal. Before:%v, After:%v", numGR, runtime.NumGoroutine())
+// 	}
+// }
+
+// type TimeoutHLSDemux struct{}
+
+// func (d TimeoutHLSDemux) PollPlaylist(ctx context.Context, pc chan m3u8.MediaPlaylist) error {
+// 	select {
+// 	case <-ctx.Done():
+// 		return ctx.Err()
+// 	}
+// }
+
+// func (d TimeoutHLSDemux) PollSegment(ctx context.Context, sc chan m3u8.MediaSegment) error {
+// 	select {
+// 	case <-ctx.Done():
+// 		return ctx.Err()
+// 	}
+// }
+
+// //This test is more for documentation - this is how timeout works here.
+// func TestWriteHLSTimeout(t *testing.T) {
+// 	stream := NewStream("test")
+// 	numGR := runtime.NumGoroutine()
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+// 	defer cancel()
+// 	err := stream.WriteHLSToStream(ctx, TimeoutHLSDemux{})
+
+// 	if err != context.DeadlineExceeded {
+// 		t.Error("Expecting EOF, but got:", err)
+// 	}
+
+// 	if stream.buffer.len() != 0 {
+// 		t.Error("Expecting 0 packets in buffer, but got:", stream.buffer.len())
+// 	}
+
+// 	if numGR != runtime.NumGoroutine() {
+// 		t.Errorf("NumGoroutine not equal. Before:%v, After:%v", numGR, runtime.NumGoroutine())
+// 	}
+// }
 
 // //Test ReadRTMP Errors
 // type FakeStreamBuffer struct {

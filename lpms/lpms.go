@@ -5,129 +5,133 @@ package lpms
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/livepeer/go-livepeer/lpms/io"
-	streamingVizClient "github.com/livepeer/streamingviz/client"
+	"github.com/golang/glog"
+	"github.com/livepeer/go-livepeer/lpms/transcoder"
+	"github.com/livepeer/go-livepeer/lpms/vidlistener"
+	"github.com/livepeer/go-livepeer/lpms/vidplayer"
+	"github.com/nareix/joy4/av"
+
+	lpmsio "github.com/livepeer/go-livepeer/lpms/io"
 	joy4rtmp "github.com/nareix/joy4/format/rtmp"
 )
 
-// "github.com/livepeer/go-livepeer/livepeer/network"
-// "github.com/livepeer/go-livepeer/livepeer/storage"
-// "github.com/livepeer/go-livepeer/livepeer/storage/streaming"
-
-//Any LivepeerNode implements this interface - we want to start moving this direction
-//Ideally, LPMS will only call these functions
-type VideoSource interface {
-	// Broadcast(inStream *av.StreamReader) (streamID string)
-	// StartStream(streamID string) (outStream *av.StreamReader, err error)
-	StopStream(streamID string) (err error)
+type LPMS struct {
+	rtmpServer  *joy4rtmp.Server
+	vidPlayer   *vidplayer.VidPlayer
+	vidListen   *vidlistener.VidListener
+	httpPort    string
+	srsRTMPPort string
+	srsHTTPPort string
 }
 
-//LPMS interface
-// func Transcode(inStream *av.StreamReader, outStream *av.StreamWriter) (err error) {
-
-// }
-
-type Server struct {
-	config *Config
-	viz    *streamingVizClient.Client
-	// rtmpConn   *joy4rtmp.Conn
-	rtmpServer *joy4rtmp.Server
+type transcodeReq struct {
+	Formats  []string
+	Bitrates []string
+	Codecin  string
+	Codecout []string
+	StreamID string
 }
 
-//Start new HTTP & RTMP server.
-//The HTTP server will serve the local player.
-//The RTMP server will listen for incoming stream.
-// func NewVideoServer(rtmpPort string, httpPort string, livepeerNode LivepeerNode) (s *Server, err error) {
-// func NewVideoServer(c *Config, videoSource VideoSource) (s *Server, err error) {
-func NewVideoServer(c *Config) (s *Server, err error) {
-	context.TODO()
-	server := &Server{config: c, rtmpServer: &joy4rtmp.Server{Addr: ":" + c.RtmpPort}}
-	return server, nil
+//New creates a new LPMS server object.  It really just brokers everything to the components.
+func New(rtmpPort string, httpPort string, srsRTMPPort string, srsHTTPPort string) *LPMS {
+	server := &joy4rtmp.Server{Addr: (":" + rtmpPort)}
+	player := &vidplayer.VidPlayer{RtmpServer: server}
+	listener := &vidlistener.VidListener{RtmpServer: server}
+	return &LPMS{rtmpServer: server, vidPlayer: player, vidListen: listener, srsRTMPPort: srsRTMPPort, srsHTTPPort: srsHTTPPort, httpPort: httpPort}
 }
 
-// func NewVideoServer(config *Config) {
-// }
+//Start starts the rtmp and http server
+func (l *LPMS) Start() error {
+	ec := make(chan error, 1)
+	go func() {
+		glog.Infof("Starting LPMS Server at :%v", l.rtmpServer.Addr)
+		ec <- l.rtmpServer.ListenAndServe()
+	}()
+	go func() {
+		glog.Infof("Starting HTTP Server at :%v", l.httpPort)
+		ec <- http.ListenAndServe(":"+l.httpPort, nil)
+	}()
 
-// func AttachHttpServer(s http) {
-// }
-
-//HandleRtmpPlay handles playing a RTMP video.  Should load a stream and play it.
-func (s *Server) HandleRtmpPlay(f func(ctx context.Context, reqPath string, dst io.Stream) error) error {
-	s.rtmpServer.HandlePlay = func(conn *joy4rtmp.Conn) {
-		glog.V(logger.Info).Infof("LPMS got RTMP request @ %v", conn.URL)
-
-		dst := &io.LPMSStream{RtmpOutput: conn}
-		ctx := context.Background()
-		c := make(chan error, 1)
-		go func() { c <- f(ctx, conn.URL.Path, dst) }()
-		select {
-		case err := <-c:
-			glog.V(logger.Error).Infof("RtmpPlay Error: %v", err)
-		}
+	select {
+	case err := <-ec:
+		glog.V(1).Infof("LPMS Server Error: %v.  Quitting...", err)
+		return err
 	}
-	return nil
 }
 
-func (s *Server) HandlePlay(ctx context.Context, f func(streamID string) (io.Stream, error)) error {
-	// self.handlePlay(ctx, self.rtmpConn, f)
-	return nil
+//HandleRTMPPublish offload to the video listener
+func (l *LPMS) HandleRTMPPublish(
+	getStreamID func(reqPath string) (string, error),
+	stream func(reqPath string) (*lpmsio.Stream, error),
+	endStream func(reqPath string)) error {
+
+	return l.vidListen.HandleRTMPPublish(getStreamID, stream, endStream)
 }
 
-func (self *Server) HandleNewStream(f func() (streamID string)) error {
-	return nil
+//HandleRTMPPlay offload to the video player
+func (l *LPMS) HandleRTMPPlay(getStream func(ctx context.Context, reqPath string, dst av.MuxCloser) error) error {
+	return l.vidPlayer.HandleRTMPPlay(getStream)
 }
 
-// func (self *Server) handlePlay(ctx context.Context, conn *joy4rtmp.Conn, getStream func(StreamID string) (io.Stream, error)) {
-// 	glog.V(logger.Info).Infof("Trying to play stream at %v", conn.URL)
+//HandleHTTPPlay offload to the video player
+func (l *LPMS) HandleHTTPPlay(getStream func(reqPath string) (*lpmsio.HLSBuffer, error)) error {
+	return l.vidPlayer.HandleHTTPPlay(getStream)
+}
 
-// 	// Parse the streamID from the path host:port/stream/{streamID}
-// 	var strmID string
-// 	regex, _ := regexp.Compile("\\/stream\\/([[:alpha:]]|\\d)*")
-// 	match := regex.FindString(conn.URL.Path)
-// 	if match != "" {
-// 		strmID = strings.Replace(match, "/stream/", "", -1)
-// 	}
+//HandleTranscode kicks off a transcoding process, keeps a local HLS buffer, and returns the new stream ID.
+//stream is the video stream you want to be transcoded.  getNewStreamID gives you a way to name the transcoded stream.
+func (l *LPMS) HandleTranscode(getInStream func(ctx context.Context, streamID string) (*lpmsio.Stream, error), getOutStream func(ctx context.Context, streamID string) (*lpmsio.Stream, error)) {
+	http.HandleFunc("/transcode", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-// 	glog.V(logger.Info).Infof("Got streamID as %v", strmID)
-// 	self.viz.LogConsume(strmID)
-// 	stream, err := getStream(strmID)
-// 	// stream, err := getStream(ctx, strmID)
-// 	// ctx.Timeout
+		//parse transcode request
+		decoder := json.NewDecoder(r.Body)
+		var tReq transcodeReq
+		if r.Body == nil {
+			http.Error(w, "Please send a request body", 400)
+			return
+		}
+		err := decoder.Decode(&tReq)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
 
-// 	// stream, err := streamer.GetStreamByStreamID(streaming.StreamID(strmID))
-// 	if stream == nil {
-// 		// stream, err = streamer.SubscribeToStream(strmID)
-// 		// if err != nil {
-// 		glog.V(logger.Info).Infof("Error subscribing to stream %v", err)
-// 		// 	return
-// 		// }
-// 	} else {
-// 		fmt.Println("Found stream: ", strmID)
-// 	}
+		//Get the RTMP Stream
+		inStream, err := getInStream(ctx, tReq.StreamID)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
 
-// 	//Send subscribe request
-// 	// forwarder.Stream(strmID, kademlia.Address(common.HexToHash("")))
+		//Get the HLS Stream
+		newStream, err := getOutStream(ctx, tReq.StreamID)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+		}
 
-// 	//Copy chunks to outgoing connection
-// 	go io.CopyRTMPFromStreamNew(ctx, conn, stream)
-// }
+		t := transcoder.New(l.srsRTMPPort, l.srsHTTPPort, newStream.StreamID)
+		//Should kick off a goroutine for this, so we can return the new streamID rightaway.
 
-// func (self *Server) startRtmpServer(c *Config) {
-// 	self.rtmpServer.HandlePlay = func(conn *joy4rtmp.Conn) {
-// 		self.rtmpConn = conn
-// 	}
-// }
+		tranMux, err := t.LocalSRSUploadMux()
+		if err != nil {
+			http.Error(w, "Cannot create a connection with local transcoder", 400)
+		}
 
-//You already have http/rtmp servers, just want to add LPMS handlers
+		uec := make(chan error, 1)
+		go func() { uec <- t.StartUpload(ctx, tranMux, inStream) }()
+		dec := make(chan error, 1)
+		go func() { dec <- t.StartDownload(ctx, newStream) }()
 
-// func StartVideoServer(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
-// 	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
-
-// 	common.SetConfig(srsRtmpPort, srsHttpPort, rtmpPort, httpPort)
-// 	server.StartRTMPServer(rtmpPort, srsRtmpPort, srsHttpPort, streamer, forwarder, viz)
-// 	server.StartHTTPServer(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, streamer, forwarder, streamdb, viz)
-
-// }
+		select {
+		case err := <-uec:
+			http.Error(w, "Cannot upload stream to transcoder: "+err.Error(), 400)
+		case err := <-dec:
+			http.Error(w, "Cannot download stream from transcoder: "+err.Error(), 400)
+		}
+	})
+}

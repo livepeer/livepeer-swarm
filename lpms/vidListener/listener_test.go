@@ -15,7 +15,7 @@ func TestError(t *testing.T) {
 	server := &joy4rtmp.Server{Addr: ":1937"}
 	listener := &VidListener{RtmpServer: server, Streams: make(map[string]LocalStream)}
 	listener.HandleRTMPPublish(
-		func(streamID chan<- string) error {
+		func(reqPath string, streamID chan<- string) error {
 			streamID <- "test"
 			return nil
 		},
@@ -31,14 +31,6 @@ func TestError(t *testing.T) {
 	go listener.RtmpServer.ListenAndServe()
 
 	time.Sleep(time.Second * 1)
-	// fmt.Println(listener.Streams)
-	// if listener.SetStream == false {
-	// 	t.Fatal("Didn't set stream")
-	// }
-
-	// if stream := listener.Stream; stream.StreamID != "test" {
-	// 	t.Fatal("Should have exited before finishing (so the stream should be removed)")
-	// }
 }
 
 func TestRTMPWithServer(t *testing.T) {
