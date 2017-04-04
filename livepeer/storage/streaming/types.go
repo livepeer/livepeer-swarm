@@ -9,6 +9,7 @@ const (
 	RequestStreamMsgID = iota
 	DeliverStreamMsgID
 	EOFStreamMsgID
+	StopStreamMsgID
 	TranscodeRequestMsgID
 	TranscodeAckMsgID
 )

@@ -29,7 +29,7 @@ func StartRTMPServer(rtmpPort string, srsRtmpPort string, srsHttpPort string, st
 	if rtmpPort == "" {
 		rtmpPort = "1935"
 	}
-	fmt.Println("Starting RTMP Server on port: ", rtmpPort)
+	glog.V(logger.Info).Info("Starting RTMP Server on port: %v", rtmpPort)
 	server := &joy4rtmp.Server{Addr: ":" + rtmpPort}
 
 	srsRTMPPort = srsRtmpPort

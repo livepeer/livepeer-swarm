@@ -31,11 +31,13 @@ The bzz protocol component speaks the bzz protocol
 */
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
@@ -252,6 +254,50 @@ func (self *bzz) handle() error {
 		glog.V(logger.Debug).Infof("Status message: %v", msg)
 		return self.protoError(ErrExtraStatusMsg, "")
 
+	case stopStreamRequestMsg:
+		var req stopStreamRequestMsgData
+		if err := msg.Decode(&req); err != nil {
+			return err
+		}
+
+		originNode := req.OriginNode
+		streamID := req.StreamID
+		concatedStreamID := streaming.MakeStreamID(originNode, streamID)
+
+		glog.V(logger.Info).Infof("Stop Stream Request %v", streamID)
+
+		// stream, err := self.streamer.GetStream(originNode, streamID)
+		if err != nil {
+			// Got an error, return
+			return err
+		}
+
+		if req.Id == streaming.StopStreamMsgID {
+
+			h := common.Hash(self.selfAddr().Addr)
+			if h != originNode {
+				glog.V(logger.Error).Infof("Self is not origin node - forwarding stop request upstream")
+				(*self.forwarder).StopStream(string(concatedStreamID), self.remoteAddr.Addr)
+			}
+
+			glog.V(logger.Error).Infof("Removing downstream node")
+			self.streamDB.RemoveDownstreamPeer(concatedStreamID, &peer{bzz: self})
+
+			// Don't delete the stream for now - may not need to
+			// if stream == nil {
+			// 	glog.V(logger.Error).Infof("Cannot find local stream to stop...")
+			// } else {
+			// 	if len(self.streamDB.DownstreamRequesters[concatedStreamID]) == 0 {
+			// 		glog.V(logger.Error).Infof("No more downstream requesters for %v, deleting stream", concatedStreamID)
+			// 		self.streamer.DeleteStream(stream.ID)
+			// 	}
+			// }
+
+		} else {
+			glog.V(logger.Error).Infof("Unrecognized request in stopStreamRequestMsg: ", req)
+			return errors.New("Unrecognized request")
+		}
+
 	case streamRequestMsg:
 		var req streamRequestMsgData
 		if err := msg.Decode(&req); err != nil {
@@ -299,14 +345,15 @@ func (self *bzz) handle() error {
 			}
 
 			//Play to local video consumer
-			if chunk.Seq%100 == 0 {
-				fmt.Printf("video seq: %d\n", chunk.Seq)
-			}
+			// if chunk.Seq%100 == 0 {
+			// 	glog.V(logger.Info).Infof("video seq: %d\n", chunk.Seq)
+			// }
 
 			stream.PutToDstVideoChan(&chunk)
 
 			// Close the source channel and delete the stream if this was an EOF msg
 			if req.Id == streaming.EOFStreamMsgID {
+				glog.V(logger.Info).Infof("Closing Video Stream: %v", stream.ID)
 				close(stream.SrcVideoChan)
 				self.streamer.DeleteStream(concatedStreamID)
 			}
@@ -693,6 +740,10 @@ func (self *bzz) store(req *storeRequestMsgData) error {
 // send streamRequestMsg
 func (self *bzz) stream(req *streamRequestMsgData) error {
 	return self.send(streamRequestMsg, req)
+}
+
+func (self *bzz) stopStream(req *stopStreamRequestMsgData) error {
+	return self.send(stopStreamRequestMsg, req)
 }
 
 // send transcodeRequestMsg
