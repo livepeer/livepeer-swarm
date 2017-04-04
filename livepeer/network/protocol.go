@@ -48,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
-	lpmsIo "github.com/livepeer/go-livepeer/lpms/io"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 )
 
@@ -402,75 +401,78 @@ func (self *bzz) handle() error {
 		}
 		req.from = &peer{bzz: self}
 
-		fmt.Println("Got Transcode Request: ", req)
-		key := req.TranscodeID.Bytes()
-		glog.V(logger.Info).Infof("Requesting a peer with transcodeID: %x", req.TranscodeID)
+		glog.V(logger.Error).Infof("Got Transcode Request: %v", req)
+		glog.V(logger.Error).Infof("Transcoding is unsupported until video segments are standardized")
+		// key := req.TranscodeID.Bytes()
+		// glog.V(logger.Info).Infof("Requesting a peer with transcodeID: %x", req.TranscodeID)
 
-		// Note this means the routing won't necessarily be routed to the absolute closes node in the network,
-		// since the knowledge of the local node can be constrained.  However, for now, a local optimum is enough
-		// to get the job done - since all we need is a single node that will do the transcoding work.
-		peers := self.hive.getPeersCloserThanSelf(key, 1)
+		// // Note this means the routing won't necessarily be routed to the absolute closes node in the network,
+		// // since the knowledge of the local node can be constrained.  However, for now, a local optimum is enough
+		// // to get the job done - since all we need is a single node that will do the transcoding work.
+		// peers := self.hive.getPeersCloserThanSelf(key, 1)
 
-		if len(peers) == 1 {
-			//Remember the upstream requester, forward to downstream peer
-			glog.V(logger.Info).Infof("Peer we got is: %v", peers[0].Addr())
-			fmt.Println("Forwarding to the closer node: ", peers[0].Addr())
-			self.streamDB.AddUpstreamTranscodeRequester(streaming.MakeStreamID(req.OriginNode, req.OriginStreamID), &peer{bzz: self})
-			peers[0].transcode(&req)
-		} else if len(peers) == 0 {
-			//You ARE the transcoder!
-			fmt.Println("I AM the transcoder.")
-			from := &peer{bzz: self}
-			transcodedVidChan := make(chan *streaming.VideoChunk, 10) //This channel needs to be closed at some point.  When is transcoding done?
+		// if len(peers) == 1 {
+		// 	//Remember the upstream requester, forward to downstream peer
+		// 	glog.V(logger.Info).Infof("Peer we got is: %v", peers[0].Addr())
+		// 	fmt.Println("Forwarding to the closer node: ", peers[0].Addr())
+		// 	self.streamDB.AddUpstreamTranscodeRequester(streaming.MakeStreamID(req.OriginNode, req.OriginStreamID), &peer{bzz: self})
+		// 	peers[0].transcode(&req)
+		// } else if len(peers) == 0 {
+		// 	//You ARE the transcoder!
+		// 	fmt.Println("I AM the transcoder.")
+		// 	from := &peer{bzz: self}
+		// 	transcodedVidChan := make(chan *streaming.VideoChunk, 10) //This channel needs to be closed at some point.  When is transcoding done?
 
-			originalStreamID := streaming.MakeStreamID(req.OriginNode, req.OriginStreamID)
-			//Subscribe to the original video
-			originalStream, err := self.streamer.GetStreamByStreamID(originalStreamID)
-			if originalStream == nil {
-				originalStream, err = self.streamer.SubscribeToStream(string(originalStreamID))
-				if err != nil {
-					glog.V(logger.Error).Infof("Error subscribing to stream %v", err)
-					return self.protoError(ErrTranscode, "Error subscribing to stream %v", err)
-				}
-				//Send subscribe request
-				(*self.forwarder).Stream(string(originalStreamID), self.remoteAddr.Addr)
-			}
+		// 	originalStreamID := streaming.MakeStreamID(req.OriginNode, req.OriginStreamID)
+		// 	//Subscribe to the original video
+		// 	originalStream, err := self.streamer.GetStreamByStreamID(originalStreamID)
+		// 	if originalStream == nil {
+		// 		originalStream, err = self.streamer.SubscribeToStream(string(originalStreamID))
+		// 		if err != nil {
+		// 			glog.V(logger.Error).Infof("Error subscribing to stream %v", err)
+		// 			return self.protoError(ErrTranscode, "Error subscribing to stream %v", err)
+		// 		}
+		// 		//Send subscribe request
+		// 		(*self.forwarder).Stream(string(originalStreamID), self.remoteAddr.Addr)
+		// 	}
 
-			transcodedStream, err := self.streamer.AddNewStream()
-			err = lpmsIo.Transcode(originalStream.DstVideoChan, transcodedVidChan, transcodedStream.ID, req.Formats[0], req.Bitrates[0], req.CodecIn, req.CodecOut[0], originalStream.CloseChan)
-			go lpmsIo.CopyChannelToChannel(transcodedVidChan, transcodedStream.SrcVideoChan)
+		// 	transcodedStream, err := self.streamer.AddNewStream()
 
-			//TODO: Need to spin up a Go Routine to monitor HLS playlist - if the past 10 are the same, close the transcodeStream
+		// err = lpmsIo.Transcode(originalStream.DstVideoChan, transcodedVidChan, transcodedStream.ID, req.Formats[0], req.Bitrates[0], req.CodecIn, req.CodecOut[0], originalStream.CloseChan)
+		// go lpmsIo.CopyChannelToChannel(transcodedVidChan, transcodedStream.SrcVideoChan)
 
-			if err != nil {
-				self.streamer.DeleteStream(transcodedStream.ID)
-				ack := &transcodeAckMsgData{
-					OriginNode:     req.OriginNode,
-					OriginStreamID: req.OriginStreamID,
-				}
-				glog.V(logger.Error).Infof("Got error during transcoding, sending empty ack.  %s", err)
-				from.transcodeAck(ack)
-			} else {
-				transcodedID := transcodedStream.ID
-				tsd := transcodedStreamData{
-					StreamID: string(transcodedID),
-					Format:   req.Formats[0],
-					Bitrate:  req.Bitrates[0],
-					CodecIn:  req.CodecIn,
-					CodecOut: req.CodecOut[0],
-				}
-				ack := &transcodeAckMsgData{
-					OriginNode:     req.OriginNode,
-					OriginStreamID: req.OriginStreamID,
-					NewStreamIDs:   []transcodedStreamData{tsd},
-				}
-				glog.V(logger.Info).Infof("Sending Ack...")
-				from.transcodeAck(ack)
+		//TODO: Need to spin up a Go Routine to monitor HLS playlist - if the past 10 are the same, close the transcodeStream
 
-			}
-		} else {
-			return self.protoError(ErrTranscode, "Error - Got %d downstream transcoders from the swarm.", len(peers))
-		}
+		// 	if err != nil {
+		// 		self.streamer.DeleteStream(transcodedStream.ID)
+		// 		ack := &transcodeAckMsgData{
+		// 			OriginNode:     req.OriginNode,
+		// 			OriginStreamID: req.OriginStreamID,
+		// 		}
+		// 		glog.V(logger.Error).Infof("Got error during transcoding, sending empty ack.  %s", err)
+		// 		from.transcodeAck(ack)
+		// 		cancel()
+		// 	} else {
+		// 		transcodedID := transcodedStream.ID
+		// 		tsd := transcodedStreamData{
+		// 			StreamID: string(transcodedID),
+		// 			Format:   req.Formats[0],
+		// 			Bitrate:  req.Bitrates[0],
+		// 			CodecIn:  req.CodecIn,
+		// 			CodecOut: req.CodecOut[0],
+		// 		}
+		// 		ack := &transcodeAckMsgData{
+		// 			OriginNode:     req.OriginNode,
+		// 			OriginStreamID: req.OriginStreamID,
+		// 			NewStreamIDs:   []transcodedStreamData{tsd},
+		// 		}
+		// 		glog.V(logger.Info).Infof("Sending Ack...")
+		// 		from.transcodeAck(ack)
+
+		// 	}
+		// } else {
+		// 	return self.protoError(ErrTranscode, "Error - Got %d downstream transcoders from the swarm.", len(peers))
+		// }
 
 	case transcodeAckMsg:
 		var req transcodeAckMsgData

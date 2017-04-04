@@ -144,14 +144,17 @@ func (self *Stream) WriteTrailer() error {
 
 	return nil
 }
+
 func (self *Stream) Close() error {
 	glog.V(logger.Info).Infof("Close")
 	return nil
 }
+
 func (self *Stream) ReadPacket() (av.Packet, error) {
 	glog.V(logger.Info).Infof("Read Packet")
 	return av.Packet{}, nil
 }
+
 func (self *Stream) Streams() ([]av.CodecData, error) {
 	glog.V(logger.Info).Infof("Streams")
 	return nil, nil
