@@ -145,6 +145,7 @@ func (self *forwarder) Stream(id string, peerAddr kademlia.Address) {
 
 }
 
+// Stop stream request - this is to stop the stream after local player is closed.  peerAddr is the original streamer's addr.
 func (self *forwarder) StopStream(id string, peerAddr kademlia.Address) {
 	s := streaming.StreamID(id)
 	nodeID, streamID := s.SplitComponents()

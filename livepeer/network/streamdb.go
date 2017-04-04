@@ -34,6 +34,7 @@ func (self *StreamDB) RemoveDownstreamPeer(streamID streaming.StreamID, p *peer)
 		}
 	}
 
+	//If we found the index, remove this peer from the slice.
 	if removei > -1 {
 		peers[removei] = peers[len(peers)-1]
 		self.DownstreamRequesters[streamID] = peers[:len(peers)-1]

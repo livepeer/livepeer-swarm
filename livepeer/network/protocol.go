@@ -272,14 +272,13 @@ func (self *bzz) handle() error {
 		}
 
 		if req.Id == streaming.StopStreamMsgID {
-
 			h := common.Hash(self.selfAddr().Addr)
 			if h != originNode {
-				glog.V(logger.Error).Infof("Self is not origin node - forwarding stop request upstream")
+				glog.V(logger.Info).Infof("Self is not origin node - forwarding stop request upstream")
 				(*self.forwarder).StopStream(string(concatedStreamID), self.remoteAddr.Addr)
 			}
 
-			glog.V(logger.Error).Infof("Removing downstream node")
+			glog.V(logger.Info).Infof("Removing downstream node")
 			self.streamDB.RemoveDownstreamPeer(concatedStreamID, &peer{bzz: self})
 
 			// Don't delete the stream for now - may not need to
