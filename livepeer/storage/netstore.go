@@ -53,6 +53,7 @@ type CloudStore interface {
 	Deliver(*Chunk)
 	Retrieve(*Chunk)
 	Stream(string, kademlia.Address)
+	StopStream(string, kademlia.Address)
 	Transcode(string, common.Hash, []string, []string, string, []string)
 	// TranscodeAck()
 }

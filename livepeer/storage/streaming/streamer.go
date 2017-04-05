@@ -75,7 +75,7 @@ func (self *Stream) PutToDstVideoChan(chunk *VideoChunk) {
 		select {
 		case self.DstVideoChan <- chunk:
 			if self.lastDstSeq < chunk.Seq-1 {
-				fmt.Printf("Chunk skipped at %d\n", chunk.Seq)
+				glog.V(logger.Info).Infof("Chunk skipped at %d\n", chunk.Seq)
 				livepeerChunkSkipMeter.Mark(1)
 			}
 			self.lastDstSeq = chunk.Seq
@@ -97,6 +97,67 @@ func (self *Stream) GetFromDstVideoChan() *VideoChunk {
 
 func (self *Stream) GetFromSrcVideoChan() *VideoChunk {
 	return <-self.SrcVideoChan
+}
+
+func (self *Stream) WriteHeader(streams []av.CodecData) error {
+	glog.V(logger.Info).Infof("Write Header")
+	chunk := &VideoChunk{
+		ID:            DeliverStreamMsgID,
+		Seq:           0,
+		HeaderStreams: streams,
+		Packet:        av.Packet{},
+		M3U8:          nil,
+		HLSSegData:    nil,
+		HLSSegName:    "",
+	}
+	self.PutToSrcVideoChan(chunk)
+
+	return nil
+}
+
+func (self *Stream) WritePacket(pkt av.Packet) error {
+	chunk := &VideoChunk{
+		ID:            DeliverStreamMsgID,
+		Seq:           0,
+		HeaderStreams: nil,
+		Packet:        pkt,
+		M3U8:          nil,
+		HLSSegData:    nil,
+		HLSSegName:    "",
+	}
+	self.PutToSrcVideoChan(chunk)
+	return nil
+}
+
+func (self *Stream) WriteTrailer() error {
+	glog.V(logger.Info).Infof("Write Trailer")
+	chunk := &VideoChunk{
+		ID:            EOFStreamMsgID,
+		Seq:           0,
+		HeaderStreams: nil,
+		Packet:        av.Packet{},
+		M3U8:          nil,
+		HLSSegData:    nil,
+		HLSSegName:    "",
+	}
+	self.PutToSrcVideoChan(chunk)
+
+	return nil
+}
+
+func (self *Stream) Close() error {
+	glog.V(logger.Info).Infof("Close")
+	return nil
+}
+
+func (self *Stream) ReadPacket() (av.Packet, error) {
+	glog.V(logger.Info).Infof("Read Packet")
+	return av.Packet{}, nil
+}
+
+func (self *Stream) Streams() ([]av.CodecData, error) {
+	glog.V(logger.Info).Infof("Streams")
+	return nil, nil
 }
 
 // The streamer brookers the video streams

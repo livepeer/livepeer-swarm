@@ -145,6 +145,37 @@ func (self *forwarder) Stream(id string, peerAddr kademlia.Address) {
 
 }
 
+// Stop stream request - this is to stop the stream after local player is closed.  peerAddr is the original streamer's addr.
+func (self *forwarder) StopStream(id string, peerAddr kademlia.Address) {
+	s := streaming.StreamID(id)
+	nodeID, streamID := s.SplitComponents()
+	msg := &stopStreamRequestMsgData{
+		OriginNode: nodeID,
+		StreamID:   streamID,
+		Id:         streaming.StopStreamMsgID,
+	}
+
+	key := nodeID.Bytes()
+
+	peers := self.hive.getPeers(key, 2)
+	var p *peer
+
+	if len(peers) > 1 {
+		if peers[0].Addr() == peerAddr {
+			p = peers[1]
+		} else {
+			p = peers[0]
+		}
+	} else if len(peers) == 1 {
+		p = peers[0]
+	} else {
+		fmt.Println("ERROR: Stream Request Sent To %d Peers\n", len(peers))
+		return
+	}
+
+	p.stopStream(msg)
+}
+
 // Transcode request - this is to request for a node to become a transcoder.  The node should send an Ack to confirm.
 func (self *forwarder) Transcode(streamId string, transcodeId common.Hash, formats []string, bitrates []string, codecin string, codeout []string) {
 	fmt.Println("Forwarding Transcode Request")

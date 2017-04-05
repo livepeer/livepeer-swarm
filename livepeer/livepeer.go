@@ -38,7 +38,7 @@ import (
 	"github.com/livepeer/go-livepeer/livepeer/network"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
-	"github.com/livepeer/go-livepeer/lpms"
+	"github.com/livepeer/go-livepeer/mediaserver"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 	"golang.org/x/net/context"
 )
@@ -223,7 +223,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 		srsRtmpPort := strconv.Itoa(rtmpPortNum + 500)
 		srsHttpPort := strconv.Itoa(rtmpPortNum + 6000)
 
-		go lpms.StartVideoServer(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, self.streamer, self.cloud, self.streamDB, self.viz)
+		go mediaserver.StartLPMS(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, self.streamer, self.cloud, self.streamDB, self.viz)
 	}
 
 	glog.V(logger.Debug).Infof("Swarm http proxy started on port: %v", self.config.Port)

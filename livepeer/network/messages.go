@@ -35,17 +35,18 @@ BZZ protocol Message Types and Message Data Types
 
 // bzz protocol message codes
 const (
-	statusMsg           = iota // 0x01
-	storeRequestMsg            // 0x02
-	retrieveRequestMsg         // 0x03
-	peersMsg                   // 0x04
-	syncRequestMsg             // 0x05
-	deliveryRequestMsg         // 0x06
-	unsyncedKeysMsg            // 0x07
-	paymentMsg                 // 0x08
-	streamRequestMsg           // 0x09
-	transcodeRequestMsg        // 0x10
-	transcodeAckMsg            // 0x11
+	statusMsg            = iota // 0x01
+	storeRequestMsg             // 0x02
+	retrieveRequestMsg          // 0x03
+	peersMsg                    // 0x04
+	syncRequestMsg              // 0x05
+	deliveryRequestMsg          // 0x06
+	unsyncedKeysMsg             // 0x07
+	paymentMsg                  // 0x08
+	streamRequestMsg            // 0x09
+	stopStreamRequestMsg        // 0x10
+	transcodeRequestMsg         // 0x11
+	transcodeAckMsg             // 0x12
 )
 
 /*
@@ -77,6 +78,20 @@ func (self *statusMsgData) String() string {
 */
 
 type streamRequestMsgData struct {
+	OriginNode common.Hash
+	StreamID   string
+	SData      []byte
+	Id         uint64
+
+	requestTimeout *time.Time
+	from           *peer
+}
+
+/*
+ stop stream requests are sent to peers who is the stream source.
+*/
+
+type stopStreamRequestMsgData struct {
 	OriginNode common.Hash
 	StreamID   string
 	SData      []byte

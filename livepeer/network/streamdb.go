@@ -1,6 +1,10 @@
 package network
 
-import "github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+import (
+	"strings"
+
+	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+)
 
 type StreamDB struct {
 	DownstreamRequesters        map[streaming.StreamID][]*peer
@@ -18,6 +22,23 @@ func NewStreamDB() *StreamDB {
 
 func (self *StreamDB) AddDownstreamPeer(streamID streaming.StreamID, p *peer) {
 	self.DownstreamRequesters[streamID] = append(self.DownstreamRequesters[streamID], p)
+}
+
+func (self *StreamDB) RemoveDownstreamPeer(streamID streaming.StreamID, p *peer) {
+	peers := self.DownstreamRequesters[streamID]
+	removei := -1
+
+	for pi, peer := range peers {
+		if strings.Compare(p.Addr().String(), peer.Addr().String()) == 0 {
+			removei = pi
+		}
+	}
+
+	//If we found the index, remove this peer from the slice.
+	if removei > -1 {
+		peers[removei] = peers[len(peers)-1]
+		self.DownstreamRequesters[streamID] = peers[:len(peers)-1]
+	}
 }
 
 func (self *StreamDB) AddUpstreamTranscodeRequester(transcodeID streaming.StreamID, p *peer) {

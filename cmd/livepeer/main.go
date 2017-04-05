@@ -12,18 +12,18 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/livepeer/go-livepeer/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/livepeer/go-livepeer/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/livepeer/go-livepeer/cmd/utils"
+	"github.com/livepeer/go-livepeer/internal/debug"
 
 	lp "github.com/livepeer/go-livepeer/livepeer"
 	bzzapi "github.com/livepeer/go-livepeer/livepeer/api"
@@ -39,8 +39,8 @@ const (
 )
 
 var (
-	gitCommit        string
-	app              = utils.NewApp(gitCommit, "Livepeer")
+	gitCommit       string
+	app             = utils.NewApp(gitCommit, "Livepeer")
 	toynetBootNodes = []string{
 		"enode://fb4c232eb8ed424d513b3a9df229fe003629420f62041381ff5b560c0b69ad4e4c977cc475391295217a7e4b324d8303922989aa699956201f79412ec38247f0@52.14.103.190:30399",
 		"enode://5639b23de156e605eac5e169a44917767d3776f938a96bbdd0e26ef40235bc23b9c219d55ec3bbe84b4461659142e2f991fd994847ecb5179ca2c53db864ec0e@52.14.16.38:30399",
@@ -240,6 +240,7 @@ func livepeer(ctx *cli.Context) error {
 	registerBzzService(ctx, stack, vizClient)
 	utils.StartNode(stack)
 	networkId := ctx.GlobalUint64(LivepeerNetworkIdFlag.Name)
+	// fmt.Printf("Network ID: %v\n", networkId)
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
 		bootnodes := strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
