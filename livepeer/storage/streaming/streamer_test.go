@@ -24,8 +24,8 @@ func TestStreamID(t *testing.T) {
 }
 
 func TestStreamerRegistry(t *testing.T) {
-	addr := randomStreamID()
-	streamID := randomStreamID()
+	addr := RandomStreamID()
+	streamID := RandomStreamID()
 	streamer, _ := NewStreamer(addr)
 
 	firstStream, _ := streamer.AddNewStream()
