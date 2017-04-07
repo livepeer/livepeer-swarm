@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/kz26/m3u8"
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
@@ -152,12 +153,41 @@ func (self *Stream) Close() error {
 
 func (self *Stream) ReadPacket() (av.Packet, error) {
 	glog.V(logger.Info).Infof("Read Packet")
-	return av.Packet{}, nil
+	return av.Packet{}, errors.New("Not Implmented")
 }
 
 func (self *Stream) Streams() ([]av.CodecData, error) {
 	glog.V(logger.Info).Infof("Streams")
-	return nil, nil
+	return nil, errors.New("Not Implmented")
+}
+
+func (self *Stream) WritePlaylist(pl m3u8.MediaPlaylist) error {
+	chunk := &VideoChunk{
+		ID:            DeliverStreamMsgID,
+		Seq:           0,
+		HeaderStreams: nil,
+		Packet:        av.Packet{},
+		M3U8:          pl.Encode().Bytes(),
+		HLSSegData:    nil,
+		HLSSegName:    "",
+	}
+	self.PutToSrcVideoChan(chunk)
+
+	return nil
+}
+
+func (self *Stream) WriteSegment(name string, s []byte) error {
+	chunk := &VideoChunk{
+		ID:            DeliverStreamMsgID,
+		Seq:           0,
+		HeaderStreams: nil,
+		Packet:        av.Packet{},
+		M3U8:          nil,
+		HLSSegData:    s,
+		HLSSegName:    name,
+	}
+	self.PutToSrcVideoChan(chunk)
+	return nil
 }
 
 // The streamer brookers the video streams
