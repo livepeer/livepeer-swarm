@@ -10,7 +10,6 @@ package mediaserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -23,29 +22,42 @@ import (
 	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
 	"github.com/nareix/joy4/av"
 
-	newLPMS "github.com/livepeer/lpms"
-	newStream "github.com/livepeer/lpms/stream"
+	"github.com/livepeer/lpms"
+	lpmsStream "github.com/livepeer/lpms/stream"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 )
 
-func StartVideoServer(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
-	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
+// func StartVideoServer(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
+// 	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
 
-	// common.SetConfig(srsRtmpPort, srsHttpPort, rtmpPort, httpPort)
-	// server.StartRTMPServer(rtmpPort, srsRtmpPort, srsHttpPort, streamer, forwarder, viz)
-	// server.StartHTTPServer(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, streamer, forwarder, streamdb, viz)
+// common.SetConfig(srsRtmpPort, srsHttpPort, rtmpPort, httpPort)
+// server.StartRTMPServer(rtmpPort, srsRtmpPort, srsHttpPort, streamer, forwarder, viz)
+// server.StartHTTPServer(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, streamer, forwarder, streamdb, viz)
 
-}
+// }
 
 func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
 	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
 
-	server := newLPMS.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort)
-	var strmID string
-	var stream *streaming.Stream
-	var lpmsStream newStream.Stream
+	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort)
+	// var strmID string
+	var localRTMPStream *streaming.Stream
+	// var localHLSStream *streaming.Stream
+	var localHLSBuffer *lpmsStream.HLSBuffer
+	var newRTMPStream lpmsStream.Stream
+	var newHLSStream lpmsStream.Stream
 	var ctx context.Context
 	var cancel context.CancelFunc
+
+	server.HandleHLSPlay(
+		func(reqPath string) (*lpmsStream.HLSBuffer, error) {
+			if localHLSBuffer != nil {
+				// glog.Infof("Found local HLS Buffer: %v", localHLSBuffer)
+				return localHLSBuffer, nil
+			}
+			glog.Infof("Didn't find local HLS Buffer...")
+			return nil, nil
+		})
 
 	server.HandleRTMPPublish(
 		//getStreamID
@@ -54,27 +66,23 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			return "", nil
 		},
 		//getStream
-		func(reqPath string) (newStream.Stream, error) {
-			regex, _ := regexp.Compile("\\/stream\\/([[:alpha:]]|\\d)*")
-			match := regex.FindString(reqPath)
-			if match != "" {
-				strmID = strings.Replace(match, "/stream/", "", -1)
-				stream, _ = streamer.GetStreamByStreamID(streaming.StreamID(strmID))
-			}
-
-			if stream == nil {
-				stream, _ = streamer.AddNewStream()
-				glog.V(logger.Info).Infof("Added a new stream with id: %v", stream.ID)
+		func(reqPath string) (lpmsStream.Stream, lpmsStream.Stream, error) {
+			if localRTMPStream == nil {
+				localRTMPStream, _ = streamer.AddNewStream()
+				localHLSBuffer = lpmsStream.NewHLSBuffer()
+				glog.V(logger.Info).Infof("Added a new stream with id: %v", localRTMPStream.ID)
 			} else {
-				glog.V(logger.Info).Infof("Got streamID as %v", strmID)
+				glog.V(logger.Info).Infof("Got streamID as %v", localRTMPStream.ID)
 			}
 
-			lpmsStream = newStream.NewVideoStream(strmID)
+			newRTMPStream = lpmsStream.NewVideoStream(localRTMPStream.ID.String())
+			newHLSStream = lpmsStream.NewVideoStream(localRTMPStream.ID.String())
 
-			viz.LogBroadcast(string(stream.ID))
-			go lpmsStream.ReadRTMPFromStream(ctx, stream)
+			viz.LogBroadcast(string(localRTMPStream.ID))
+			go newRTMPStream.ReadRTMPFromStream(ctx, localRTMPStream)
+			go newHLSStream.ReadHLSFromStream(localHLSBuffer)
 
-			return lpmsStream, nil
+			return newRTMPStream, newHLSStream, nil
 		},
 		//finishStream
 		func(reqPath string) {
@@ -94,17 +102,28 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				strmID = strings.Replace(match, "/stream/", "", -1)
 			}
 
-			glog.V(logger.Info).Infof("Got streamID as %v", strmID)
+			if strmID == "" {
+				glog.Errorf("Cannot find stream for %v", reqPath)
+				return errors.New("Stream Not Found")
+			}
+
+			glog.Infof("Got streamID as %v", strmID)
 			viz.LogConsume(strmID)
+
+			if localRTMPStream != nil && strmID == localRTMPStream.ID.String() {
+				glog.Infof("Consuming local stream")
+				return StreamChanToDst(localRTMPStream.SrcVideoChan, dst)
+			}
+
 			stream, err := streamer.GetStreamByStreamID(streaming.StreamID(strmID))
 			if stream == nil {
 				stream, err = streamer.SubscribeToStream(strmID)
 				if err != nil {
-					glog.V(logger.Info).Infof("Error subscribing to stream %v", err)
+					glog.Infof("Error subscribing to stream %v", err)
 					return errors.New("Error subscribing to stream")
 				}
 			} else {
-				fmt.Println("Found stream: ", strmID)
+				glog.Infof("Found stream: ", strmID)
 			}
 
 			//Send subscribe request
@@ -112,47 +131,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 
 			ec := make(chan error, 1)
 			go func() {
-				ec <- func() error {
-					chunk := <-stream.DstVideoChan
-					glog.V(logger.Info).Infof("Writing RTMP to player")
-
-					if err := dst.WriteHeader(chunk.HeaderStreams); err != nil {
-						glog.V(logger.Error).Infof("Error writing header copying from channel")
-						return err
-					}
-
-					kfCount := 0
-
-					for {
-						select {
-						case chunk := <-stream.DstVideoChan:
-							if chunk.ID == streaming.EOFStreamMsgID {
-								glog.V(logger.Info).Infof("Copying EOF from channel")
-
-								err := dst.WriteTrailer()
-								if err != nil {
-									glog.V(logger.Error).Infof("Error writing trailer: ", err)
-									return err
-								}
-							}
-							if chunk.Packet.IsKeyFrame {
-								kfCount = kfCount + 1
-							}
-
-							//Wait for the first keyframe
-							if kfCount < 2 {
-								break
-							}
-
-							err := dst.WritePacket(chunk.Packet)
-							if err != nil {
-								glog.V(logger.Error).Infof("Error writing packet to video player: %s", err)
-								forwarder.StopStream(strmID, kademlia.Address(ethCommon.HexToHash("")))
-								return err
-							}
-						}
-					}
-				}()
+				ec <- StreamChanToDst(stream.DstVideoChan, dst)
 			}()
 
 			select {
@@ -163,4 +142,44 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 		})
 
 	server.Start()
+}
+
+func StreamChanToDst(src chan *streaming.VideoChunk, dst av.MuxCloser) error {
+	chunk := <-src
+
+	if err := dst.WriteHeader(chunk.HeaderStreams); err != nil {
+		glog.V(logger.Error).Infof("Error writing header copying from channel")
+		return err
+	}
+
+	kfCount := 0
+
+	for {
+		select {
+		case chunk := <-src:
+			if chunk.ID == streaming.EOFStreamMsgID {
+				glog.V(logger.Info).Infof("Copying EOF from channel")
+
+				err := dst.WriteTrailer()
+				if err != nil {
+					glog.V(logger.Error).Infof("Error writing trailer: ", err)
+					return err
+				}
+			}
+			if chunk.Packet.IsKeyFrame {
+				kfCount = kfCount + 1
+			}
+
+			//Wait for the first keyframe
+			if kfCount < 2 {
+				break
+			}
+
+			err := dst.WritePacket(chunk.Packet)
+			if err != nil {
+				glog.V(logger.Error).Infof("Error writing packet to video player: %s", err)
+				return err
+			}
+		}
+	}
 }
