@@ -31,6 +31,7 @@ The bzz protocol component speaks the bzz protocol
 */
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -47,7 +48,8 @@ import (
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	lpmsStream "github.com/livepeer/lpms/stream"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 )
 
@@ -306,56 +308,86 @@ func (self *bzz) handle() error {
 		streamID := req.StreamID
 		concatedStreamID := streaming.MakeStreamID(originNode, streamID)
 
-		// Get the stream object out of the streamer
-		stream, err := self.streamer.GetStream(originNode, streamID)
-		if err != nil {
-			// Got an error, return
-			return err
-		}
+		strm := self.streamer.GetNetworkStream(concatedStreamID)
 
 		if req.Id == streaming.RequestStreamMsgID {
-			if stream == nil {
-				// Don't have this stream yet. Subscribe and request it.
-				stream, _ = self.streamer.SubscribeToStream(string(concatedStreamID))
+			if strm == nil {
+				//Create new network stream?
 				(*self.forwarder).Stream(string(concatedStreamID), self.remoteAddr.Addr)
-
-				// Log the relay
 				self.viz.LogRelay(string(concatedStreamID))
 			}
-			// Aready subscribed to this stream. Add this peer to the downstream requesters
-			self.streamDB.AddDownstreamPeer(concatedStreamID, &peer{bzz: self})
-			glog.V(logger.Info).Infof("Registering %v as a downstream requester for stream %v", self.remoteAddr.Addr, stream.ID)
-
-			if len(self.streamDB.DownstreamRequesters[concatedStreamID]) == 1 {
-				// First peer, kick off the sync thread
-				go self.syncStreamToDownstreamRequesters(stream)
+			//Add PeerMux
+			mux := &peerMux{peer: &peer{bzz: self}}
+			ctx := context.Background()
+			if req.Format == lpmsStream.HLS {
+				self.streamer.SubscribeToHLSStream(ctx, concatedStreamID.String(), concatedStreamID.String(), mux)
+			} else {
+				self.streamer.SubscribeToRTMPStream(ctx, concatedStreamID.String(), concatedStreamID.String(), mux)
 			}
 
 		} else {
-			// In this case req.Id == DeliverStreamMsgID || EOFStreamMsgID, so there is data in the req.SData field
+			if strm == nil {
+				glog.Errorf("Received a video chunk but cannot find stream: %v", concatedStreamID)
+			}
 			chunk := streaming.ByteArrInVideoChunk(req.SData)
-
-			downstreamRequesters := self.streamDB.DownstreamRequesters[concatedStreamID]
-			if len(downstreamRequesters) > 0 {
-				// Write data to the Src channel of the stream so that it can be
-				// propagated downstream
-				stream.PutToSrcVideoChan(&chunk)
-			}
-
-			//Play to local video consumer
-			// if chunk.Seq%100 == 0 {
-			// 	glog.V(logger.Info).Infof("video seq: %d\n", chunk.Seq)
-			// }
-
-			stream.PutToDstVideoChan(&chunk)
-
-			// Close the source channel and delete the stream if this was an EOF msg
-			if req.Id == streaming.EOFStreamMsgID {
-				glog.V(logger.Info).Infof("Closing Video Stream: %v", stream.ID)
-				close(stream.SrcVideoChan)
-				self.streamer.DeleteStream(concatedStreamID)
-			}
+			err = InsertChunkToStream(chunk, strm)
 		}
+
+		// // Get the stream object out of the streamer
+		// stream, err := self.streamer.GetStream(originNode, streamID)
+		// if err != nil {
+		// 	// Got an error, return
+		// 	return err
+		// }
+
+		// if req.Id == streaming.RequestStreamMsgID {
+		// 	if stream == nil {
+		// 		// Don't have this stream yet. Subscribe and request it.
+		// 		stream, _ = self.streamer.SubscribeToStream(string(concatedStreamID))
+		// 		(*self.forwarder).Stream(string(concatedStreamID), self.remoteAddr.Addr)
+
+		// 		// Log the relay
+		// 		self.viz.LogRelay(string(concatedStreamID))
+		// 	}
+		// 	// Aready subscribed to this stream. Add this peer to the downstream requesters
+		// 	self.streamDB.AddDownstreamPeer(concatedStreamID, &peer{bzz: self})
+		// 	glog.V(logger.Info).Infof("Registering %v as a downstream requester for stream %v", self.remoteAddr.Addr, stream.ID)
+
+		// 	if len(self.streamDB.DownstreamRequesters[concatedStreamID]) == 1 {
+		// 		// First peer, kick off the sync thread
+		// 		go self.syncStreamToDownstreamRequesters(stream)
+		// 	}
+
+		// } else {
+		// 	// In this case req.Id == DeliverStreamMsgID || EOFStreamMsgID, so there is data in the req.SData field
+		// 	chunk := streaming.ByteArrInVideoChunk(req.SData)
+		// 	// if (chunk.IsRTMP) {
+		// 	// 	stream.WriteRTMP()
+		// 	// } else { //chunk is HLS
+		// 	// 	stream.WriteHLSSegment(chunk.HLSSeg)
+		// 	// }
+
+		// 	downstreamRequesters := self.streamDB.DownstreamRequesters[concatedStreamID]
+		// 	if len(downstreamRequesters) > 0 {
+		// 		// Write data to the Src channel of the stream so that it can be
+		// 		// propagated downstream
+		// 		stream.PutToSrcVideoChan(&chunk)
+		// 	}
+
+		// 	//Play to local video consumer
+		// 	// if chunk.Seq%100 == 0 {
+		// 	// 	glog.V(logger.Info).Infof("video seq: %d\n", chunk.Seq)
+		// 	// }
+
+		// 	stream.PutToDstVideoChan(&chunk)
+
+		// 	// Close the source channel and delete the stream if this was an EOF msg
+		// 	if req.Id == streaming.EOFStreamMsgID {
+		// 		glog.V(logger.Info).Infof("Closing Video Stream: %v", stream.ID)
+		// 		close(stream.SrcVideoChan)
+		// 		self.streamer.DeleteStream(concatedStreamID)
+		// 	}
+		// }
 
 	case storeRequestMsg:
 		// store requests are dispatched to netStore
@@ -677,6 +709,10 @@ func (self *bzz) sync(state *syncState) error {
 
 func (self *bzz) String() string {
 	return self.remoteAddr.String()
+}
+
+func InsertChunkToStream(chunk streaming.VideoChunk, strm *lpmsStream.VideoStream) error {
+	return errors.New("Not Implemented")
 }
 
 func (self *bzz) syncStreamToDownstreamRequesters(stream *streaming.Stream) {

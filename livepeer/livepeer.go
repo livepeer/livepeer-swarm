@@ -37,7 +37,7 @@ import (
 	httpapi "github.com/livepeer/go-livepeer/livepeer/api/http"
 	"github.com/livepeer/go-livepeer/livepeer/network"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+	"github.com/livepeer/go-livepeer/livepeer/streaming"
 	"github.com/livepeer/go-livepeer/mediaserver"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 	"golang.org/x/net/context"

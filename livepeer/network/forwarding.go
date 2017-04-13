@@ -19,6 +19,7 @@ package network
 import (
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,7 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+	"github.com/livepeer/go-livepeer/livepeer/streaming"
 )
 
 const requesterCount = 3
@@ -137,7 +138,8 @@ func (self *forwarder) Stream(id string, peerAddr kademlia.Address) {
 	} else if len(peers) == 1 {
 		p = peers[0]
 	} else {
-		fmt.Println("ERROR: Stream Request Sent To %d Peers\n", len(peers))
+		glog.V(logger.Error).Infof("ERROR: Stream Request Sent To %d Peers\n", len(peers))
+		debug.PrintStack()
 		return
 	}
 

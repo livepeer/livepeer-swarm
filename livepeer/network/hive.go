@@ -28,7 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
+	"github.com/kz26/m3u8"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
+	"github.com/nareix/joy4/av"
 )
 
 // Hive is the logistic manager of the swarm
@@ -332,6 +334,17 @@ func (self *peer) Url() string {
 func (self *peer) LastActive() time.Time {
 	return self.lastActive
 }
+
+type peerMux struct {
+	peer *peer
+}
+
+func (p *peerMux) WritePlaylist(m3u8.MediaPlaylist) error   { return nil }
+func (p *peerMux) WriteSegment(name string, s []byte) error { return nil }
+
+func (p *peerMux) WriteHeader([]av.CodecData) error { return nil } // write the file header
+func (p *peerMux) WritePacket(av.Packet) error      { return nil }
+func (p *peerMux) WriteTrailer() error              { return nil } // finish writing file, this func can be called only once
 
 // reads the serialised form of sync state persisted as the 'Meta' attribute
 // and sets the decoded syncState on the online node

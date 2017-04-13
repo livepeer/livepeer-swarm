@@ -96,7 +96,7 @@ func TestConfigWriteRead(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	prvkey := crypto.ToECDSA(common.Hex2Bytes(hexprvkey))
-	orig, err := NewConfig(tmp, common.Address{}, prvkey, 323)
+	orig, err := NewConfig(tmp, common.Address{}, prvkey, 323, "")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -110,7 +110,7 @@ func TestConfigWriteRead(t *testing.T) {
 		t.Fatalf("default config mismatch:\nexpected: %v\ngot: %v", exp, string(data))
 	}
 
-	conf, err := NewConfig(tmp, common.Address{}, prvkey, 323)
+	conf, err := NewConfig(tmp, common.Address{}, prvkey, 323, "")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
+	lpmsStream "github.com/livepeer/lpms/stream"
 )
 
 /*
@@ -80,8 +81,10 @@ func (self *statusMsgData) String() string {
 type streamRequestMsgData struct {
 	OriginNode common.Hash
 	StreamID   string
-	SData      []byte
-	Id         uint64
+	Format     lpmsStream.VideoFormat
+
+	SData []byte
+	Id    uint64
 
 	requestTimeout *time.Time
 	from           *peer
