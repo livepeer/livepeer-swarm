@@ -110,6 +110,10 @@ var (
 		Usage: "Specify RTMP streaming port",
 		Value: "1935",
 	}
+	HLSFlag = cli.BoolFlag{
+		Name: "hls",
+		Usage: "True if you'd like to stream the HLS rendition",
+	}
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  metrics.MetricsEnabledFlag,
 		Usage: "Enable metrics collection and reporting",
@@ -195,6 +199,7 @@ The output of this command is supposed to be machine-readable.
 		SwarmUploadDefaultPath,
 		// streaming flags
 		RTMPFlag,
+		HLSFlag,
 		MetricsEnabledFlag,
 		VizEnabledFlag,
 		VizHostFlag,
@@ -273,7 +278,23 @@ func livepeer(ctx *cli.Context) error {
 func stream(ctx *cli.Context) error {
 	port := ctx.GlobalString(RTMPFlag.Name)
 	streamID := ctx.Args()[0]
-	rtmpURL := fmt.Sprintf("rtmp://localhost:%v/stream/%v", port, streamID)
+	var rtmpURL string
+
+	// Determine if you are streaming the HLS or RTMP version. If --hls is passed in, stream HLS
+	hlsRequest := ctx.GlobalBool(HLSFlag.Name)
+	if hlsRequest == true {
+		numericPort, err := strconv.Atoi(port)
+		if err != nil {
+			fmt.Println("Need an rtmp port")
+			os.Exit(1)
+		}
+		
+		port = strconv.Itoa(numericPort + 7000)  // HLS port is 7000 + RTMP by default
+		
+		rtmpURL = fmt.Sprintf("http://localhost:%v/stream/%v.m3u8", port, streamID)
+	} else {
+		rtmpURL = fmt.Sprintf("rtmp://localhost:%v/stream/%v", port, streamID)
+	}
 
 	cmd := exec.Command("ffplay", rtmpURL)
 	err := cmd.Start()
