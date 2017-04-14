@@ -31,6 +31,7 @@ import (
 	"github.com/kz26/m3u8"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	lpmsStream "github.com/livepeer/lpms/stream"
 	"github.com/nareix/joy4/av"
 )
 
@@ -424,7 +425,7 @@ func (p *peerMux) WritePacket(pkt av.Packet) error {
 	return nil
 }
 func (p *peerMux) WriteTrailer() error {
-	// glog.Infof("Writing trailer to peer")
+	glog.Infof("Writing trailer to peer")
 	chunk := streaming.VideoChunk{
 		ID: streaming.EOFStreamMsgID,
 		// Packet: pkt,
@@ -432,9 +433,10 @@ func (p *peerMux) WriteTrailer() error {
 
 	msg := &streamRequestMsgData{
 		OriginNode: p.originNode,
+		Format:     lpmsStream.RTMP,
 		StreamID:   p.streamID,
 		SData:      streaming.VideoChunkToByteArr(chunk),
-		Id:         streaming.DeliverStreamMsgID,
+		Id:         streaming.EOFStreamMsgID,
 	}
 	p.peer.stream(msg)
 	return nil

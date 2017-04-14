@@ -226,11 +226,6 @@ func (self *Streamer) GetRTMPBuffer(id string) (buf av.Demuxer) {
 //Subscribes to a RTMP stream.  This function should be called in combination with forwarder.stream(), or another mechanism that will
 //populate the VideoStream associated with the id.
 func (self *Streamer) SubscribeToRTMPStream(ctx context.Context, strmID string, subID string, mux av.Muxer) (err error) {
-	// q := self.rtmpBuffers[StreamID(strmID)]
-	// if q != nil {
-	// 	return nil
-	// }
-
 	strm := self.networkStreams[StreamID(strmID)]
 	if strm == nil {
 		//Create VideoStream
@@ -249,20 +244,22 @@ func (self *Streamer) SubscribeToRTMPStream(ctx context.Context, strmID string, 
 	go sub.SubscribeRTMP(ctx, subID, mux)
 
 	return nil
+}
 
-	// q = pubsub.NewQueue()
-	// self.rtmpBuffers[StreamID(strmID)] = q
-	// go strm.ReadRTMPFromStream(ctx, q)
-
+func (self *Streamer) EndRTMPStream(strmID string) {
+	strm := self.networkStreams[StreamID(strmID)]
+	if strm != nil {
+		strm.WriteRTMPTrailer()
+	}
 }
 
 func (self *Streamer) GetHLSMuxer(id string) (mux lpmsStream.HLSMuxer) {
 	return self.hlsBuffers[StreamID(id)]
 }
 
-func (self *Streamer) GetHLSSubscription(subID string) (mux lpmsStream.HLSMuxer) {
-	return nil
-}
+// func (self *Streamer) GetHLSSubscription(subID string) (mux lpmsStream.HLSMuxer) {
+// 	return nil
+// }
 
 func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string, mux lpmsStream.HLSMuxer) error {
 	strm := self.networkStreams[StreamID(strmID)]

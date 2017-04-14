@@ -311,6 +311,7 @@ func (self *bzz) handle() error {
 		concatedStreamID := streaming.MakeStreamID(originNode, streamID)
 
 		strm := self.streamer.GetNetworkStream(concatedStreamID)
+		ctx := context.Background()
 
 		if req.Id == streaming.RequestStreamMsgID {
 			if strm == nil {
@@ -320,7 +321,6 @@ func (self *bzz) handle() error {
 			}
 			//Add PeerMux
 			mux := &peerMux{peer: &peer{bzz: self}, originNode: originNode, streamID: streamID}
-			ctx := context.Background()
 			if req.Format == lpmsStream.HLS {
 				glog.Infof("Subscribing to HLS stream")
 				self.streamer.SubscribeToHLSStream(ctx, concatedStreamID.String(), concatedStreamID.String(), mux)
@@ -329,12 +329,20 @@ func (self *bzz) handle() error {
 				self.streamer.SubscribeToRTMPStream(ctx, concatedStreamID.String(), concatedStreamID.String(), mux)
 			}
 
-		} else {
+		} else if req.Id == streaming.DeliverStreamMsgID {
 			if strm == nil {
 				glog.Errorf("Received a video chunk but cannot find stream: %v", concatedStreamID)
 			}
 			chunk := streaming.ByteArrInVideoChunk(req.SData)
 			err = InsertChunkToStream(chunk, strm)
+		} else if req.Id == streaming.EOFStreamMsgID {
+			if req.Format == lpmsStream.HLS {
+				//Cannot actively end a HLS stream - gotta figure out how to do this.
+			} else {
+				self.streamer.EndRTMPStream(string(concatedStreamID))
+			}
+		} else {
+			glog.Infof("Cannot process stream request message: %v", req)
 		}
 
 		// // Get the stream object out of the streamer
@@ -441,9 +449,9 @@ func (self *bzz) handle() error {
 		// key := req.TranscodeID.Bytes()
 		// glog.V(logger.Info).Infof("Requesting a peer with transcodeID: %x", req.TranscodeID)
 
-		// // Note this means the routing won't necessarily be routed to the absolute closes node in the network,
-		// // since the knowledge of the local node can be constrained.  However, for now, a local optimum is enough
-		// // to get the job done - since all we need is a single node that will do the transcoding work.
+		// // // Note this means the routing won't necessarily be routed to the absolute closes node in the network,
+		// // // since the knowledge of the local node can be constrained.  However, for now, a local optimum is enough
+		// // // to get the job done - since all we need is a single node that will do the transcoding work.
 		// peers := self.hive.getPeersCloserThanSelf(key, 1)
 
 		// if len(peers) == 1 {
@@ -456,6 +464,9 @@ func (self *bzz) handle() error {
 		// 	//You ARE the transcoder!
 		// 	fmt.Println("I AM the transcoder.")
 		// 	from := &peer{bzz: self}
+		// 	transcodedStrm := self.streamer.AddNewNetworkStream()
+		// 	// newHLSMux =
+		// 	self.streamer.SubscribeToHLSStream(ctx, originalStreamID, originalStreamID, newHLSMux)
 		// 	transcodedVidChan := make(chan *streaming.VideoChunk, 10) //This channel needs to be closed at some point.  When is transcoding done?
 
 		// 	originalStreamID := streaming.MakeStreamID(req.OriginNode, req.OriginStreamID)
