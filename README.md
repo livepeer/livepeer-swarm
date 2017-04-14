@@ -110,7 +110,14 @@ You can also use the web interface to test out streaming. To do that, make sure 
 
 ### Transcoding
 
-Currently transcoding is an experimental feature.  Check out the [hls branch](https://github.com/livepeer/go-livepeer/tree/hls) for more informaiton.
+Currently transcoding is an experimental feature. An HLS output stream
+is available with its own unique streamID, which is placed into the
+console output. Try
+
+`livepeer --hls stream <HLS streamID>`
+
+to consume the HLS transcoded stream. Standby for more updates on
+using the network to transcode into multiple formats and bitrates.
 
 ## Metrics and monitoring
 
