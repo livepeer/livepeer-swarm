@@ -26,8 +26,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/livepeer/go-livepeer/livepeer/network"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
+	"github.com/golang/glog"
+	"github.com/livepeer/go-livepeer/livepeer/network"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 )
 
@@ -60,6 +61,7 @@ type Config struct {
 // config is agnostic to where private key is coming from
 // so managing accounts is outside swarm and left to wrappers
 func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, networkId uint64, rtmpPort string) (self *Config, err error) {
+	glog.Infof("Config: RTMP Port: %v", rtmpPort)
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
 	dirpath := filepath.Join(path, "bzz-"+common.Bytes2Hex(address.Bytes()))
 	err = os.MkdirAll(dirpath, os.ModePerm)

@@ -50,7 +50,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 	// var localHLSBuffer *lpmsStream.HLSBuffer
 	// var newRTMPStream lpmsStream.Stream
 	// var newHLSStream lpmsStream.Stream
-	var ctx context.Context
+	// var ctx context.Context
 	var cancel context.CancelFunc
 
 	server.HandleHLSPlay(
@@ -70,7 +70,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			strm := streamer.GetNetworkStream(streaming.StreamID(strmID))
 			if strm == nil {
 				glog.Infof("Cannot find HLS stream:%v locally, forwarding request to the newtork", strmID)
-				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")))
+				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS)
 			} else {
 				glog.Infof("Found HLS stream:%v locally", strmID)
 			}
@@ -79,6 +79,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			if hlsBuffer == nil {
 				glog.Infof("Creating new HLS buffer")
 				hlsBuffer = lpmsStream.NewHLSBuffer()
+				ctx := context.Background()
 				err := streamer.SubscribeToHLSStream(ctx, strmID, "local", hlsBuffer)
 				if err != nil {
 					glog.Errorf("Error subscribing to hls stream:%v", reqPath)
@@ -93,7 +94,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 	server.HandleRTMPPublish(
 		//getStreamID
 		func(reqPath string) (string, error) {
-			ctx, cancel = context.WithCancel(context.Background())
+			// ctx, cancel := context.WithCancel(context.Background())
 			return "", nil
 		},
 		//getStream
@@ -146,26 +147,11 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			// glog.Infof("Got RTMP streamID as %v", strmID)
 			viz.LogConsume(strmID)
 
-			// if localRTMPStream != nil && strmID == localRTMPStream.ID.String() {
-			// 	glog.Infof("Consuming local stream")
-			// 	return StreamChanToDst(localRTMPStream.SrcVideoChan, dst)
-			// }
-
-			// stream, err := streamer.GetStreamByStreamID(streaming.StreamID(strmID))
-			// if stream == nil {
-			// 	stream, err = streamer.SubscribeToStream(strmID)
-			// 	if err != nil {
-			// 		glog.Infof("Error subscribing to stream %v", err)
-			// 		return errors.New("Error subscribing to stream")
-			// 	}
-			// } else {
-			// 	glog.Infof("Found stream: ", strmID)
-			// }
 			strm := streamer.GetNetworkStream(streaming.StreamID(strmID))
 			if strm == nil {
 				//Send subscribe request
 				glog.Infof("No local RTMP stream found - forwarding request to the network")
-				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")))
+				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.RTMP)
 			}
 			q := pubsub.NewQueue()
 			err := streamer.SubscribeToRTMPStream(ctx, strmID, "local", q)
@@ -175,17 +161,6 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			}
 
 			return avutil.CopyFile(dst, q.Oldest())
-
-			// ec := make(chan error, 1)
-			// go func() {
-			// 	ec <- StreamChanToDst(stream.DstVideoChan, dst)
-			// }()
-
-			// select {
-			// case err := <-ec:
-			// 	return err
-			// }
-
 		})
 
 	server.Start()

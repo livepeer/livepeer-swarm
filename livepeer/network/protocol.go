@@ -31,6 +31,7 @@ The bzz protocol component speaks the bzz protocol
 */
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -47,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
+	"github.com/kz26/m3u8"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 	"github.com/livepeer/go-livepeer/livepeer/streaming"
 	lpmsStream "github.com/livepeer/lpms/stream"
@@ -313,15 +315,17 @@ func (self *bzz) handle() error {
 		if req.Id == streaming.RequestStreamMsgID {
 			if strm == nil {
 				//Create new network stream?
-				(*self.forwarder).Stream(string(concatedStreamID), self.remoteAddr.Addr)
+				(*self.forwarder).Stream(string(concatedStreamID), self.remoteAddr.Addr, req.Format)
 				self.viz.LogRelay(string(concatedStreamID))
 			}
 			//Add PeerMux
-			mux := &peerMux{peer: &peer{bzz: self}}
+			mux := &peerMux{peer: &peer{bzz: self}, originNode: originNode, streamID: streamID}
 			ctx := context.Background()
 			if req.Format == lpmsStream.HLS {
+				glog.Infof("Subscribing to HLS stream")
 				self.streamer.SubscribeToHLSStream(ctx, concatedStreamID.String(), concatedStreamID.String(), mux)
 			} else {
+				glog.Infof("Subscribing to RTMP stream")
 				self.streamer.SubscribeToRTMPStream(ctx, concatedStreamID.String(), concatedStreamID.String(), mux)
 			}
 
@@ -712,7 +716,25 @@ func (self *bzz) String() string {
 }
 
 func InsertChunkToStream(chunk streaming.VideoChunk, strm *lpmsStream.VideoStream) error {
-	return errors.New("Not Implemented")
+	switch {
+	case chunk.M3U8 != nil:
+		p, _ := m3u8.NewMediaPlaylist(50000, 50000)
+		err := p.DecodeFrom(bytes.NewReader(chunk.M3U8), true)
+		if err != nil {
+			glog.Errorf("Error decoding HLS playlist")
+		}
+		strm.WriteHLSPlaylistToStream(*p)
+	case chunk.HLSSegData != nil:
+		strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: chunk.HLSSegName, Data: chunk.HLSSegData})
+	case chunk.HeaderStreams != nil:
+		strm.WriteRTMPHeader(chunk.HeaderStreams)
+	case chunk.Packet.Data != nil:
+		strm.WriteRTMPPacket(chunk.Packet)
+	default:
+		glog.Errorf("Cannot parse video chunk: %v", chunk)
+		return errors.New("InsertChunk")
+	}
+	return nil
 }
 
 func (self *bzz) syncStreamToDownstreamRequesters(stream *streaming.Stream) {
