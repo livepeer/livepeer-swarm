@@ -28,11 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
-	"github.com/kz26/m3u8"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/streaming"
-	lpmsStream "github.com/livepeer/lpms/stream"
-	"github.com/nareix/joy4/av"
 )
 
 // Hive is the logistic manager of the swarm
@@ -336,111 +332,6 @@ func (self *peer) Url() string {
 func (self *peer) LastActive() time.Time {
 	return self.lastActive
 }
-
-type peerMux struct {
-	originNode common.Hash
-	streamID   string
-	peer       *peer
-}
-
-func (p *peerMux) WritePlaylist(pl m3u8.MediaPlaylist) error {
-	glog.Infof("Writing pl to peer")
-	chunk := streaming.VideoChunk{
-		ID: streaming.DeliverStreamMsgID,
-		// Seq:           0,
-		// HeaderStreams: nil,
-		// Packet:        av.Packet{},
-		M3U8: pl.Encode().Bytes(),
-		// HLSSegData:    nil,
-		// HLSSegName:    "",
-	}
-
-	msg := &streamRequestMsgData{
-		OriginNode: p.originNode,
-		StreamID:   p.streamID,
-		SData:      streaming.VideoChunkToByteArr(chunk),
-		Id:         streaming.DeliverStreamMsgID,
-	}
-	p.peer.stream(msg)
-	return nil
-}
-func (p *peerMux) WriteSegment(name string, s []byte) error {
-	glog.Infof("Writing segment to peer")
-	chunk := streaming.VideoChunk{
-		ID: streaming.DeliverStreamMsgID,
-		// Seq:           0,
-		// HeaderStreams: nil,
-		// Packet:        av.Packet{},
-		// M3U8:          nil,
-		HLSSegData: s,
-		HLSSegName: name,
-	}
-
-	msg := &streamRequestMsgData{
-		OriginNode: p.originNode,
-		StreamID:   p.streamID,
-		SData:      streaming.VideoChunkToByteArr(chunk),
-		Id:         streaming.DeliverStreamMsgID,
-	}
-	p.peer.stream(msg)
-	return nil
-}
-
-func (p *peerMux) WriteHeader(header []av.CodecData) error {
-	// glog.Infof("Writing header to peer")
-	chunk := streaming.VideoChunk{
-		ID:            streaming.DeliverStreamMsgID,
-		Seq:           0,
-		HeaderStreams: header,
-		// Packet:        av.Packet{},
-		// M3U8:          nil,
-		// HLSSegData:    nil,
-		// HLSSegName:    "",
-	}
-
-	msg := &streamRequestMsgData{
-		OriginNode: p.originNode,
-		StreamID:   p.streamID,
-		SData:      streaming.VideoChunkToByteArr(chunk),
-		Id:         streaming.DeliverStreamMsgID,
-	}
-	p.peer.stream(msg)
-	return nil
-}
-
-func (p *peerMux) WritePacket(pkt av.Packet) error {
-	// glog.Infof("Writing packet to peer")
-	chunk := streaming.VideoChunk{
-		ID:     streaming.DeliverStreamMsgID,
-		Packet: pkt,
-	}
-
-	msg := &streamRequestMsgData{
-		OriginNode: p.originNode,
-		StreamID:   p.streamID,
-		SData:      streaming.VideoChunkToByteArr(chunk),
-		Id:         streaming.DeliverStreamMsgID,
-	}
-	p.peer.stream(msg)
-	return nil
-}
-func (p *peerMux) WriteTrailer() error {
-	glog.Infof("Writing trailer to peer")
-	chunk := streaming.VideoChunk{
-		ID: streaming.EOFStreamMsgID,
-		// Packet: pkt,
-	}
-
-	msg := &streamRequestMsgData{
-		OriginNode: p.originNode,
-		Format:     lpmsStream.RTMP,
-		StreamID:   p.streamID,
-		SData:      streaming.VideoChunkToByteArr(chunk),
-		Id:         streaming.EOFStreamMsgID,
-	}
-	p.peer.stream(msg)
-	return nil
-} // finish writing file, this func can be called only once
 
 // reads the serialised form of sync state persisted as the 'Meta' attribute
 // and sets the decoded syncState on the online node

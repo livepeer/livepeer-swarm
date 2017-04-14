@@ -324,7 +324,7 @@ func (self *bzz) handle() error {
 				self.viz.LogRelay(string(concatedStreamID))
 			}
 			//Add PeerMux
-			mux := &peerMux{peer: &peer{bzz: self}, originNode: originNode, streamID: streamID}
+			mux := &peerMuxer{peer: &peer{bzz: self}, originNode: originNode, streamID: streamID}
 			if req.Format == lpmsStream.HLS {
 				glog.Infof("Subscribing remote host %v to HLS stream", self.remoteAddr.String())
 				self.streamer.SubscribeToHLSStream(ctx, concatedStreamID.String(), self.remoteAddr.String(), mux)
