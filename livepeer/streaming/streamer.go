@@ -275,12 +275,22 @@ func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, s
 		go sub.StartHLSWorker(ctx)
 	}
 
-	// buf = lpmsStream.NewHLSBuffer()
 	self.hlsBuffers[StreamID(strmID)] = mux
 	return sub.SubscribeHLS(subID, mux)
+}
 
-	// sub := self.subscribers[StreamID(strmID)]
-	// sub.SubscribeHLS(subID, mux)
+func (self *Streamer) UnsubscribeToHLSStream(strmID string, subID string) {
+	sub := self.subscribers[StreamID(strmID)]
+	if sub != nil {
+		sub.UnsubscribeHLS(subID)
+	}
+}
+
+func (self *Streamer) UnsubscribeToRTMPStream(strmID string, subID string) {
+	sub := self.subscribers[StreamID(strmID)]
+	if sub != nil {
+		sub.UnsubscribeRTMP(subID)
+	}
 }
 
 // func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string) (buf *lpmsStream.HLSBuffer, err error) {

@@ -96,6 +96,7 @@ type streamRequestMsgData struct {
 
 type stopStreamRequestMsgData struct {
 	OriginNode common.Hash
+	Format     lpmsStream.VideoFormat
 	StreamID   string
 	SData      []byte
 	Id         uint64

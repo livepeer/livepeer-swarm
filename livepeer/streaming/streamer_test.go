@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"testing"
+	"time"
 
 	"bytes"
 
@@ -63,79 +64,87 @@ func TestStreamerRegistry(t *testing.T) {
 type Counter struct {
 	Count int8
 }
-type TestDemux struct {
-	c *Counter
+
+type TestQueue struct {
+	c            *Counter
+	wroteTrailer bool
 }
 
-func (d *TestDemux) Close() error                     { return nil }
-func (d *TestDemux) Streams() ([]av.CodecData, error) { return []av.CodecData{}, nil }
-func (d *TestDemux) ReadPacket() (av.Packet, error) {
-	if d.c.Count == 10 {
+func (d *TestQueue) Close() error                     { return nil }
+func (d *TestQueue) Streams() ([]av.CodecData, error) { return []av.CodecData{}, nil }
+func (d *TestQueue) ReadPacket() (av.Packet, error) {
+	if d.c.Count == 0 {
 		return av.Packet{Idx: d.c.Count}, io.EOF
 	}
 
-	d.c.Count = d.c.Count + 1
+	d.c.Count = d.c.Count - 1
 	return av.Packet{Idx: d.c.Count, Data: []byte{0, 1}}, nil
 }
 
-//pubsub.Queue doesn't do anything when calling WriteTrailer, which is an issue here (we need to pass the information along for subscribers).
-//Need to fix this, probably extend it.
-// func TestSubscribeToRTMP(t *testing.T) {
-// 	addr := RandomStreamID()
-// 	streamID := RandomStreamID()
-// 	streamer, _ := NewStreamer(addr)
-// 	id := MakeStreamID(addr, streamID.Str())
+func (d *TestQueue) WriteHeader([]av.CodecData) error {
+	return nil
+}
 
-// 	// bufLen := len(streamer.rtmpBuffers)
-// 	streamsLen := len(streamer.networkStreams)
-// 	// if bufLen != 0 {
-// 	// 	t.Errorf("Expecting length of 0 for buffer, got %v", bufLen)
-// 	// }
-// 	if streamsLen != 0 {
-// 		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
-// 	}
+func (d *TestQueue) WriteTrailer() error {
+	d.wroteTrailer = true
+	return nil
+}
 
-// 	q := pubsub.NewQueue()
-// 	streamer.SubscribeToRTMPStream(context.Background(), id.String(), "test", q)
-// 	// q, err := streamer.SubscribeToRTMPStream(context.Background(), id.String())
-// 	// streamer.SubscribeToRTMPStream(context.Background(), id.String())
+func (d *TestQueue) WritePacket(av.Packet) error {
+	// fmt.Println("Writing packet")
+	d.c.Count = d.c.Count + 1
+	return nil
+}
 
-// 	// bufLen = len(streamer.rtmpBuffers)
-// 	streamsLen = len(streamer.networkStreams)
-// 	// if bufLen != 1 {
-// 	// 	t.Errorf("Expecting length of 1 for buffer, got %v", bufLen)
-// 	// }
+func TestSubscribeToRTMP(t *testing.T) {
+	addr := RandomStreamID()
+	streamID := RandomStreamID()
+	streamer, _ := NewStreamer(addr)
+	id := MakeStreamID(addr, streamID.Str())
 
-// 	if streamsLen != 1 {
-// 		t.Errorf("Expecting length of 1 for streams, got %v", streamsLen)
-// 	}
+	streamsLen := len(streamer.networkStreams)
 
-// 	// if err != nil {
-// 	// 	t.Errorf("Got error subscribing to RTMP: %v", err)
-// 	// }
+	if streamsLen != 0 {
+		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
+	}
 
-// 	strm := streamer.GetNetworkStream(id)
-// 	ctx := context.Background()
-// 	go strm.WriteRTMPToStream(ctx, &TestDemux{c: &Counter{}})
-// 	fmt.Printf("Subscribed to stream: %v\n", id)
+	q := &TestQueue{c: &Counter{Count: 0}}
+	streamer.SubscribeToRTMPStream(context.Background(), id.String(), "test", q)
 
-// 	c := int8(0)
-// 	demux := q.Oldest()
-// 	for {
-// 		pkt, err := demux.ReadPacket()
-// 		fmt.Printf("pkt: %v, err: %v\n", pkt, err)
-// 		if err == io.EOF {
-// 			break
-// 		}
-// 		c = c + 1
-// 		if c != pkt.Idx {
-// 			t.Errorf("Expecting count %v, got %v", c, pkt.Idx)
-// 		}
-// 	}
-// 	if c != 10 {
-// 		t.Errorf("Expecting 10 packets, got: %v", c)
-// 	}
-// }
+	streamsLen = len(streamer.networkStreams)
+	if streamsLen != 1 {
+		t.Errorf("Expecting length of 1 for streams, got %v", streamsLen)
+	}
+
+	strm := streamer.GetNetworkStream(id)
+	ctx := context.Background()
+	ec := make(chan error)
+	go func() { ec <- strm.WriteRTMPToStream(ctx, &TestQueue{c: &Counter{Count: 10}}) }()
+
+	select {
+	case <-ec:
+		// case err := <-ec:
+		// fmt.Printf("Got err: %v\n", err)
+	}
+
+	time.Sleep(1 * time.Second) //This is a terrible hack... But we have no way of blocking for SubscribeToRTMPStream until a EOF.  Need to be fixed
+
+	c := int8(0)
+	for {
+		pkt, err := q.ReadPacket()
+		// fmt.Printf("pkt: %v, err: %v\n", pkt, err)
+		if err == io.EOF {
+			break
+		}
+		c = c + 1
+		if c != (10 - pkt.Idx) {
+			t.Errorf("Expecting count %v, got %v", c, pkt.Idx)
+		}
+	}
+	if c != 10 {
+		t.Errorf("Expecting 10 packets, got: %v", c)
+	}
+}
 
 func TestSubscribeToHLS(t *testing.T) {
 	addr := RandomStreamID()

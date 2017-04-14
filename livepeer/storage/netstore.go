@@ -54,7 +54,7 @@ type CloudStore interface {
 	Deliver(*Chunk)
 	Retrieve(*Chunk)
 	Stream(string, kademlia.Address, lpmsStream.VideoFormat)
-	StopStream(string, kademlia.Address)
+	StopStream(string, kademlia.Address, lpmsStream.VideoFormat)
 	Transcode(string, common.Hash, []string, []string, string, []string)
 	// TranscodeAck()
 }

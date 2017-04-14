@@ -150,13 +150,14 @@ func (self *forwarder) Stream(id string, peerAddr kademlia.Address, format lpmsS
 }
 
 // Stop stream request - this is to stop the stream after local player is closed.  peerAddr is the original streamer's addr.
-func (self *forwarder) StopStream(id string, peerAddr kademlia.Address) {
+func (self *forwarder) StopStream(id string, peerAddr kademlia.Address, format lpmsStream.VideoFormat) {
 	s := streaming.StreamID(id)
 	nodeID, streamID := s.SplitComponents()
 	msg := &stopStreamRequestMsgData{
 		OriginNode: nodeID,
 		StreamID:   streamID,
 		Id:         streaming.StopStreamMsgID,
+		Format:     format,
 	}
 
 	key := nodeID.Bytes()
