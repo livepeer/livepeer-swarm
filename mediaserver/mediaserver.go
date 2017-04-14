@@ -42,16 +42,6 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
 
 	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort)
-	// var strmID string
-	// var rtmpBuffer av.Demuxer
-	// var hlsBuffer *lpmsStream.HLSBuffer
-	// var localRTMPStream *streaming.Stream
-	// var localHLSStream *streaming.Stream
-	// var localHLSBuffer *lpmsStream.HLSBuffer
-	// var newRTMPStream lpmsStream.Stream
-	// var newHLSStream lpmsStream.Stream
-	// var ctx context.Context
-	var cancel context.CancelFunc
 
 	server.HandleHLSPlay(
 		func(reqPath string) (*lpmsStream.HLSBuffer, error) {
@@ -124,7 +114,6 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 		//finishStream
 		func(reqPath string) {
 			glog.V(logger.Info).Infof("Finish Stream - canceling stream (need to implement handler for Done())")
-			cancel()
 		})
 
 	server.HandleRTMPPlay(
