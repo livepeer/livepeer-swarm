@@ -19,6 +19,7 @@ package network
 import (
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,7 +28,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	lpmsStream "github.com/livepeer/lpms/stream"
 )
 
 const requesterCount = 3
@@ -114,12 +116,13 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 }
 
 // Stream request - this is to request for a stream, not to do broadcast.  The chunks should arrive in protocol.go
-func (self *forwarder) Stream(id string, peerAddr kademlia.Address) {
+func (self *forwarder) Stream(id string, peerAddr kademlia.Address, format lpmsStream.VideoFormat) {
 	s := streaming.StreamID(id)
 	nodeID, streamID := s.SplitComponents()
 	msg := &streamRequestMsgData{
 		OriginNode: nodeID,
 		StreamID:   streamID,
+		Format:     format,
 		Id:         streaming.RequestStreamMsgID,
 	}
 
@@ -137,7 +140,8 @@ func (self *forwarder) Stream(id string, peerAddr kademlia.Address) {
 	} else if len(peers) == 1 {
 		p = peers[0]
 	} else {
-		fmt.Println("ERROR: Stream Request Sent To %d Peers\n", len(peers))
+		glog.V(logger.Error).Infof("ERROR: Stream Request Sent To %d Peers\n", len(peers))
+		debug.PrintStack()
 		return
 	}
 
@@ -146,13 +150,14 @@ func (self *forwarder) Stream(id string, peerAddr kademlia.Address) {
 }
 
 // Stop stream request - this is to stop the stream after local player is closed.  peerAddr is the original streamer's addr.
-func (self *forwarder) StopStream(id string, peerAddr kademlia.Address) {
+func (self *forwarder) StopStream(id string, peerAddr kademlia.Address, format lpmsStream.VideoFormat) {
 	s := streaming.StreamID(id)
 	nodeID, streamID := s.SplitComponents()
 	msg := &stopStreamRequestMsgData{
 		OriginNode: nodeID,
 		StreamID:   streamID,
 		Id:         streaming.StopStreamMsgID,
+		Format:     format,
 	}
 
 	key := nodeID.Bytes()

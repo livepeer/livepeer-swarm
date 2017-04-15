@@ -31,6 +31,8 @@ The bzz protocol component speaks the bzz protocol
 */
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -46,8 +48,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
+	"github.com/kz26/m3u8"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	lpmsStream "github.com/livepeer/lpms/stream"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 )
 
@@ -258,6 +262,10 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return err
 		}
+		if err != nil {
+			glog.Errorf("Error decoding stopStreamRequestMsg: %v", err)
+			return err
+		}
 
 		originNode := req.OriginNode
 		streamID := req.StreamID
@@ -265,21 +273,21 @@ func (self *bzz) handle() error {
 
 		glog.V(logger.Info).Infof("Stop Stream Request %v", streamID)
 
-		// stream, err := self.streamer.GetStream(originNode, streamID)
-		if err != nil {
-			// Got an error, return
-			return err
-		}
-
 		if req.Id == streaming.StopStreamMsgID {
 			h := common.Hash(self.selfAddr().Addr)
 			if h != originNode {
 				glog.V(logger.Info).Infof("Self is not origin node - forwarding stop request upstream")
-				(*self.forwarder).StopStream(string(concatedStreamID), self.remoteAddr.Addr)
+				(*self.forwarder).StopStream(string(concatedStreamID), self.remoteAddr.Addr, req.Format)
+			}
+			if req.Format == lpmsStream.HLS {
+				glog.V(logger.Info).Infof("Removing remote host %v from HLS subscription", self.remoteAddr.Addr.String())
+				self.streamer.UnsubscribeToHLSStream(concatedStreamID.String(), self.remoteAddr.Addr.String())
+			} else {
+				glog.V(logger.Info).Infof("Removing remote host %v from RTMP subscription", self.remoteAddr.Addr.String())
+				self.streamer.UnsubscribeToRTMPStream(concatedStreamID.String(), self.remoteAddr.Addr.String())
 			}
 
-			glog.V(logger.Info).Infof("Removing downstream node")
-			self.streamDB.RemoveDownstreamPeer(concatedStreamID, &peer{bzz: self})
+			// self.streamDB.RemoveDownstreamPeer(concatedStreamID, &peer{bzz: self})
 
 			// Don't delete the stream for now - may not need to
 			// if stream == nil {
@@ -306,55 +314,42 @@ func (self *bzz) handle() error {
 		streamID := req.StreamID
 		concatedStreamID := streaming.MakeStreamID(originNode, streamID)
 
-		// Get the stream object out of the streamer
-		stream, err := self.streamer.GetStream(originNode, streamID)
-		if err != nil {
-			// Got an error, return
-			return err
-		}
+		strm := self.streamer.GetNetworkStream(concatedStreamID)
+		ctx := context.Background()
 
 		if req.Id == streaming.RequestStreamMsgID {
-			if stream == nil {
-				// Don't have this stream yet. Subscribe and request it.
-				stream, _ = self.streamer.SubscribeToStream(string(concatedStreamID))
-				(*self.forwarder).Stream(string(concatedStreamID), self.remoteAddr.Addr)
-
-				// Log the relay
+			if strm == nil {
+				//Create new network stream?
+				(*self.forwarder).Stream(string(concatedStreamID), self.remoteAddr.Addr, req.Format)
 				self.viz.LogRelay(string(concatedStreamID))
 			}
-			// Aready subscribed to this stream. Add this peer to the downstream requesters
-			self.streamDB.AddDownstreamPeer(concatedStreamID, &peer{bzz: self})
-			glog.V(logger.Info).Infof("Registering %v as a downstream requester for stream %v", self.remoteAddr.Addr, stream.ID)
-
-			if len(self.streamDB.DownstreamRequesters[concatedStreamID]) == 1 {
-				// First peer, kick off the sync thread
-				go self.syncStreamToDownstreamRequesters(stream)
+			//Add PeerMux
+			mux := &peerMuxer{peer: &peer{bzz: self}, originNode: originNode, streamID: streamID}
+			if req.Format == lpmsStream.HLS {
+				glog.Infof("Subscribing remote host %v to HLS stream", self.remoteAddr.String())
+				self.streamer.SubscribeToHLSStream(ctx, concatedStreamID.String(), self.remoteAddr.String(), mux)
+			} else {
+				glog.Infof("Subscribing remote host %v to RTMP stream", self.remoteAddr.String())
+				self.streamer.SubscribeToRTMPStream(ctx, concatedStreamID.String(), self.remoteAddr.String(), mux)
 			}
 
-		} else {
-			// In this case req.Id == DeliverStreamMsgID || EOFStreamMsgID, so there is data in the req.SData field
+		} else if req.Id == streaming.DeliverStreamMsgID {
+			if strm == nil {
+				glog.Errorf("Received a video chunk but cannot find stream: %v", concatedStreamID)
+			}
 			chunk := streaming.ByteArrInVideoChunk(req.SData)
-
-			downstreamRequesters := self.streamDB.DownstreamRequesters[concatedStreamID]
-			if len(downstreamRequesters) > 0 {
-				// Write data to the Src channel of the stream so that it can be
-				// propagated downstream
-				stream.PutToSrcVideoChan(&chunk)
+			err = insertChunkToStream(chunk, strm)
+			if err != nil {
+				glog.Errorf("Error inserting chunk into stream: %v", err)
 			}
-
-			//Play to local video consumer
-			// if chunk.Seq%100 == 0 {
-			// 	glog.V(logger.Info).Infof("video seq: %d\n", chunk.Seq)
-			// }
-
-			stream.PutToDstVideoChan(&chunk)
-
-			// Close the source channel and delete the stream if this was an EOF msg
-			if req.Id == streaming.EOFStreamMsgID {
-				glog.V(logger.Info).Infof("Closing Video Stream: %v", stream.ID)
-				close(stream.SrcVideoChan)
-				self.streamer.DeleteStream(concatedStreamID)
+		} else if req.Id == streaming.EOFStreamMsgID {
+			if req.Format == lpmsStream.HLS {
+				//TODO: Cannot actively end a HLS stream - gotta figure out how to do this.
+			} else {
+				self.streamer.EndRTMPStream(string(concatedStreamID))
 			}
+		} else {
+			glog.Errorf("Cannot process stream request message: %v", req)
 		}
 
 	case storeRequestMsg:
@@ -405,9 +400,9 @@ func (self *bzz) handle() error {
 		// key := req.TranscodeID.Bytes()
 		// glog.V(logger.Info).Infof("Requesting a peer with transcodeID: %x", req.TranscodeID)
 
-		// // Note this means the routing won't necessarily be routed to the absolute closes node in the network,
-		// // since the knowledge of the local node can be constrained.  However, for now, a local optimum is enough
-		// // to get the job done - since all we need is a single node that will do the transcoding work.
+		// // // Note this means the routing won't necessarily be routed to the absolute closes node in the network,
+		// // // since the knowledge of the local node can be constrained.  However, for now, a local optimum is enough
+		// // // to get the job done - since all we need is a single node that will do the transcoding work.
 		// peers := self.hive.getPeersCloserThanSelf(key, 1)
 
 		// if len(peers) == 1 {
@@ -420,6 +415,9 @@ func (self *bzz) handle() error {
 		// 	//You ARE the transcoder!
 		// 	fmt.Println("I AM the transcoder.")
 		// 	from := &peer{bzz: self}
+		// 	transcodedStrm := self.streamer.AddNewNetworkStream()
+		// 	// newHLSMux =
+		// 	self.streamer.SubscribeToHLSStream(ctx, originalStreamID, originalStreamID, newHLSMux)
 		// 	transcodedVidChan := make(chan *streaming.VideoChunk, 10) //This channel needs to be closed at some point.  When is transcoding done?
 
 		// 	originalStreamID := streaming.MakeStreamID(req.OriginNode, req.OriginStreamID)
@@ -679,27 +677,26 @@ func (self *bzz) String() string {
 	return self.remoteAddr.String()
 }
 
-func (self *bzz) syncStreamToDownstreamRequesters(stream *streaming.Stream) {
-	originNode, streamID := stream.ID.SplitComponents()
-	for videoChunk := range stream.SrcVideoChan {
-
-		msg := &streamRequestMsgData{
-			OriginNode: originNode,
-			StreamID:   streamID,
-			SData:      streaming.VideoChunkToByteArr(*videoChunk),
-			Id:         streaming.DeliverStreamMsgID,
+func insertChunkToStream(chunk streaming.VideoChunk, strm *lpmsStream.VideoStream) error {
+	switch {
+	case chunk.M3U8 != nil:
+		p, _ := m3u8.NewMediaPlaylist(50000, 50000)
+		err := p.DecodeFrom(bytes.NewReader(chunk.M3U8), true)
+		if err != nil {
+			glog.Errorf("Error decoding HLS playlist")
 		}
-
-		for _, peer := range self.streamDB.DownstreamRequesters[stream.ID] {
-
-			// Stream this to the requestor
-			err := peer.stream(msg)
-			if err != nil {
-				glog.V(logger.Error).Infof("Error sending stream to requestor: %s\n", err)
-				return
-			}
-		}
+		strm.WriteHLSPlaylistToStream(*p)
+	case chunk.HLSSegData != nil:
+		strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: chunk.HLSSegName, Data: chunk.HLSSegData})
+	case chunk.HeaderStreams != nil:
+		strm.WriteRTMPHeader(chunk.HeaderStreams)
+	case chunk.Packet.Data != nil:
+		strm.WriteRTMPPacket(chunk.Packet)
+	default:
+		glog.Errorf("Cannot parse video chunk: %v", chunk)
+		return errors.New("InsertChunk")
 	}
+	return nil
 }
 
 // repair reported address if IP missing

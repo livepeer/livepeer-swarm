@@ -37,7 +37,7 @@ import (
 	httpapi "github.com/livepeer/go-livepeer/livepeer/api/http"
 	"github.com/livepeer/go-livepeer/livepeer/network"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/storage/streaming"
+	"github.com/livepeer/go-livepeer/livepeer/streaming"
 	"github.com/livepeer/go-livepeer/mediaserver"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 	"golang.org/x/net/context"
@@ -213,6 +213,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 		go httpapi.StartHttpServer(self.api, &httpapi.Server{Addr: addr, CorsString: self.corsString})
 	}
 
+	glog.Infof("Livepeer.go: RTMPport: %v", self.config.RTMPPort)
 	if self.config.RTMPPort != "" {
 		//StartRTMPServer spins up a go routine internally.  It would be good to know the convention
 		//around this.  Go routines are spun up all over the place in this codebase, it's a little tough

@@ -2,6 +2,7 @@ package streaming
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -12,7 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/kz26/m3u8"
+	lpmsStream "github.com/livepeer/lpms/stream"
 	"github.com/nareix/joy4/av"
+	"github.com/nareix/joy4/av/pubsub"
 	"github.com/nareix/joy4/codec/aacparser"
 	"github.com/nareix/joy4/codec/h264parser"
 )
@@ -192,22 +195,151 @@ func (self *Stream) WriteSegment(name string, s []byte) error {
 
 // The streamer brookers the video streams
 type Streamer struct {
-	Streams     map[StreamID]*Stream
-	SelfAddress common.Hash
+	Streams        map[StreamID]*Stream
+	networkStreams map[StreamID]*lpmsStream.VideoStream
+	subscribers    map[StreamID]*lpmsStream.StreamSubscriber
+	hlsBuffers     map[StreamID]lpmsStream.HLSMuxer
+	rtmpBuffers    map[StreamID]*pubsub.Queue
+	SelfAddress    common.Hash
 }
 
 func NewStreamer(selfAddress common.Hash) (*Streamer, error) {
 	glog.V(logger.Info).Infof("Setting up new streamer with self address: %x", selfAddress[:])
 	return &Streamer{
-		Streams:     make(map[StreamID]*Stream),
-		SelfAddress: selfAddress,
+		Streams:        make(map[StreamID]*Stream),
+		networkStreams: make(map[StreamID]*lpmsStream.VideoStream),
+		subscribers:    make(map[StreamID]*lpmsStream.StreamSubscriber),
+		hlsBuffers:     make(map[StreamID]lpmsStream.HLSMuxer),
+		rtmpBuffers:    make(map[StreamID]*pubsub.Queue),
+		SelfAddress:    selfAddress,
 	}, nil
+}
+
+func (self *Streamer) GetRTMPBuffer(id string) (buf av.Demuxer) {
+	q := self.rtmpBuffers[StreamID(id)]
+	if q != nil {
+		buf = q.Oldest()
+	}
+	return
+}
+
+//Subscribes to a RTMP stream.  This function should be called in combination with forwarder.stream(), or another mechanism that will
+//populate the VideoStream associated with the id.
+func (self *Streamer) SubscribeToRTMPStream(ctx context.Context, strmID string, subID string, mux av.Muxer) (err error) {
+	strm := self.networkStreams[StreamID(strmID)]
+	if strm == nil {
+		//Create VideoStream
+		strm = lpmsStream.NewVideoStream(strmID)
+		self.networkStreams[StreamID(strmID)] = strm
+	}
+
+	sub := self.subscribers[StreamID(strmID)]
+	if sub == nil {
+		//Create Subscriber, start worker
+		sub = lpmsStream.NewStreamSubscriber(strm)
+		self.subscribers[StreamID(strmID)] = sub
+		go sub.StartRTMPWorker(ctx)
+	}
+
+	go sub.SubscribeRTMP(ctx, subID, mux)
+
+	return nil
+}
+
+func (self *Streamer) EndRTMPStream(strmID string) {
+	strm := self.networkStreams[StreamID(strmID)]
+	if strm != nil {
+		strm.WriteRTMPTrailer()
+	}
+}
+
+func (self *Streamer) GetHLSMuxer(id string) (mux lpmsStream.HLSMuxer) {
+	return self.hlsBuffers[StreamID(id)]
+}
+
+// func (self *Streamer) GetHLSSubscription(subID string) (mux lpmsStream.HLSMuxer) {
+// 	return nil
+// }
+
+func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string, mux lpmsStream.HLSMuxer) error {
+	strm := self.networkStreams[StreamID(strmID)]
+	if strm == nil {
+		strm = lpmsStream.NewVideoStream(strmID)
+		self.networkStreams[StreamID(strmID)] = strm
+	}
+
+	sub := self.subscribers[StreamID(strmID)]
+	if sub == nil {
+		sub = lpmsStream.NewStreamSubscriber(strm)
+		self.subscribers[StreamID(strmID)] = sub
+		go sub.StartHLSWorker(ctx)
+	}
+
+	self.hlsBuffers[StreamID(strmID)] = mux
+	return sub.SubscribeHLS(subID, mux)
+}
+
+func (self *Streamer) UnsubscribeToHLSStream(strmID string, subID string) {
+	sub := self.subscribers[StreamID(strmID)]
+	if sub != nil {
+		sub.UnsubscribeHLS(subID)
+	}
+}
+
+func (self *Streamer) UnsubscribeToRTMPStream(strmID string, subID string) {
+	sub := self.subscribers[StreamID(strmID)]
+	if sub != nil {
+		sub.UnsubscribeRTMP(subID)
+	}
+}
+
+// func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string) (buf *lpmsStream.HLSBuffer, err error) {
+// 	buf = self.hlsBuffers[StreamID(strmID)]
+// 	if buf != nil {
+// 		return buf, nil
+// 	}
+
+// 	strm := self.networkStreams[StreamID(strmID)]
+// 	if strm == nil {
+// 		strm = lpmsStream.NewVideoStream(strmID)
+// 		self.networkStreams[StreamID(strmID)] = strm
+// 	}
+
+// 	sub := self.subscribers[StreamID(strmID)]
+// 	if sub == nil {
+// 		sub = lpmsStream.NewStreamSubscriber(strm)
+// 		self.subscribers[StreamID(strmID)] = sub
+// 		go sub.StartHLSWorker(ctx)
+// 	}
+
+// 	buf = lpmsStream.NewHLSBuffer()
+// 	sub.SubscribeHLS(subID, buf)
+
+// 	// self.hlsBuffers[StreamID(id)] = buf
+// 	// go strm.ReadHLSFromStream(ctx, buf)
+
+// 	return
+// }
+
+func (self *Streamer) GetNetworkStream(id StreamID) *lpmsStream.VideoStream {
+	return self.networkStreams[id]
 }
 
 func (self *Streamer) SubscribeToStream(id string) (stream *Stream, err error) {
 	streamID := StreamID(id) //MakeStreamID(nodeID, id)
 	glog.V(logger.Info).Infof("Subscribing to stream with ID: %v", streamID)
 	return self.saveStreamForId(streamID)
+}
+
+func (self *Streamer) AddNewNetworkStream() (strm *lpmsStream.VideoStream, err error) {
+	uid := RandomStreamID()
+	streamID := MakeStreamID(self.SelfAddress, fmt.Sprintf("%x", uid))
+
+	strm = lpmsStream.NewVideoStream(streamID.String())
+	self.networkStreams[streamID] = strm
+
+	// glog.V(logger.Info).Infof("Adding new video stream with ID: %v", streamID)
+	return
 }
 
 func (self *Streamer) AddNewStream() (stream *Stream, err error) {
