@@ -5,6 +5,8 @@ package mediaserver
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -131,6 +133,13 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				return err
 			}
 		})
+
+	fs := http.FileServer(http.Dir("static"))
+	fmt.Println("Serving static files from: ", fs)
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/static/broadcast.html", 301)
+	})
 
 	server.Start()
 }
