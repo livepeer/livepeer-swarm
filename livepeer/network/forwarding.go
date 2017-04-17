@@ -17,7 +17,6 @@
 package network
 
 import (
-	"fmt"
 	"math/rand"
 	"runtime/debug"
 	"time"
@@ -174,7 +173,7 @@ func (self *forwarder) StopStream(id string, peerAddr kademlia.Address, format l
 	} else if len(peers) == 1 {
 		p = peers[0]
 	} else {
-		fmt.Println("ERROR: Stream Request Sent To %d Peers\n", len(peers))
+		glog.Errorf("ERROR: Stream Request Sent To %d Peers\n", len(peers))
 		return
 	}
 
@@ -183,7 +182,7 @@ func (self *forwarder) StopStream(id string, peerAddr kademlia.Address, format l
 
 // Transcode request - this is to request for a node to become a transcoder.  The node should send an Ack to confirm.
 func (self *forwarder) Transcode(streamId string, transcodeId common.Hash, formats []string, bitrates []string, codecin string, codeout []string) {
-	fmt.Println("Forwarding Transcode Request")
+	glog.Infof("Forwarding Transcode Request")
 	s := streaming.StreamID(streamId)
 	nodeID, streamID := s.SplitComponents()
 	msg := &transcodeRequestMsgData{
@@ -202,11 +201,11 @@ func (self *forwarder) Transcode(streamId string, transcodeId common.Hash, forma
 	peers := self.hive.getPeers(transcodeId.Bytes(), 1)
 	if len(peers) > 0 {
 		for _, p := range peers {
-			fmt.Println("Sending transcode req to peer: %v", p.Addr())
+			glog.Infof("Sending transcode req to peer: %v", p.Addr())
 			p.transcode(msg)
 		}
 	} else {
-		fmt.Errorf("Error: no peer found to forward Transcode request.")
+		glog.Errorf("Error: no peer found to forward Transcode request.")
 		return
 	}
 }
