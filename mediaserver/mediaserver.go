@@ -57,7 +57,8 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				glog.Infof("Creating new HLS buffer")
 				hlsBuffer = lpmsStream.NewHLSBuffer()
 				ctx := context.Background()
-				err := streamer.SubscribeToHLSStream(ctx, strmID, "local", hlsBuffer)
+				subID := "local"
+				err := streamer.SubscribeToHLSStream(ctx, strmID, subID, hlsBuffer)
 				if err != nil {
 					glog.Errorf("Error subscribing to hls stream:%v", reqPath)
 					return nil, err
@@ -118,7 +119,9 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.RTMP)
 			}
 			q := pubsub.NewQueue()
-			err := streamer.SubscribeToRTMPStream(ctx, strmID, "local", q)
+			subID := streaming.RandomStreamID().Str()
+
+			err := streamer.SubscribeToRTMPStream(ctx, strmID, subID, q)
 			if err != nil {
 				glog.Errorf("Error subscribing to stream %v", err)
 				return err
@@ -128,8 +131,9 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			go func() { ec <- avutil.CopyFile(dst, q.Oldest()) }()
 			select {
 			case err := <-ec:
+				streamer.UnsubscribeToRTMPStream(strmID, subID)
 				glog.Errorf("Error copying to local player: %v", err)
-				forwarder.StopStream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.RTMP)
+				forwarder.StopStream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.RTMP) //This could fail if it's a local stream, but it's ok.
 				return err
 			}
 		})
