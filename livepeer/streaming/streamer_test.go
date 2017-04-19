@@ -61,6 +61,23 @@ func TestStreamerRegistry(t *testing.T) {
 	}
 }
 
+func TestNetworkStream(t *testing.T) {
+	addr := RandomStreamID()
+	// streamID := RandomStreamID()
+	streamer, _ := NewStreamer(addr)
+	strm, _ := streamer.AddNewNetworkStream(lpmsStream.HLS)
+	strmLen := len(streamer.networkStreams)
+	if strmLen != 1 {
+		t.Errorf("Expecting 1 stream, got %v", strmLen)
+	}
+
+	streamer.DeleteNetworkStream(StreamID(strm.GetStreamID()))
+	strmLen = len(streamer.networkStreams)
+	if strmLen != 0 {
+		t.Errorf("Expecting 0 stream, got %v", strmLen)
+	}
+}
+
 type Counter struct {
 	Count int8
 }
