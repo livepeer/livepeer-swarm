@@ -223,13 +223,22 @@ func (self *Streamer) GetRTMPBuffer(id string) (buf av.Demuxer) {
 	return
 }
 
+func (self *Streamer) GetAllRTMPBufferIDs() []StreamID {
+	ids := make([]StreamID, 0, len(self.rtmpBuffers))
+	for k, _ := range self.rtmpBuffers {
+		ids = append(ids, k)
+	}
+
+	return ids
+}
+
 //Subscribes to a RTMP stream.  This function should be called in combination with forwarder.stream(), or another mechanism that will
 //populate the VideoStream associated with the id.
 func (self *Streamer) SubscribeToRTMPStream(ctx context.Context, strmID string, subID string, mux av.Muxer) (err error) {
 	strm := self.networkStreams[StreamID(strmID)]
 	if strm == nil {
 		//Create VideoStream
-		strm = lpmsStream.NewVideoStream(strmID)
+		strm = lpmsStream.NewVideoStream(strmID, lpmsStream.RTMP)
 		self.networkStreams[StreamID(strmID)] = strm
 	}
 
@@ -257,6 +266,15 @@ func (self *Streamer) GetHLSMuxer(id string) (mux lpmsStream.HLSMuxer) {
 	return self.hlsBuffers[StreamID(id)]
 }
 
+func (self *Streamer) GetAllHLSMuxerIDs() []StreamID {
+	ids := make([]StreamID, 0, len(self.hlsBuffers))
+	for k, _ := range self.hlsBuffers {
+		ids = append(ids, k)
+	}
+
+	return ids
+}
+
 // func (self *Streamer) GetHLSSubscription(subID string) (mux lpmsStream.HLSMuxer) {
 // 	return nil
 // }
@@ -264,7 +282,7 @@ func (self *Streamer) GetHLSMuxer(id string) (mux lpmsStream.HLSMuxer) {
 func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string, mux lpmsStream.HLSMuxer) error {
 	strm := self.networkStreams[StreamID(strmID)]
 	if strm == nil {
-		strm = lpmsStream.NewVideoStream(strmID)
+		strm = lpmsStream.NewVideoStream(strmID, lpmsStream.HLS)
 		self.networkStreams[StreamID(strmID)] = strm
 	}
 
@@ -325,21 +343,33 @@ func (self *Streamer) GetNetworkStream(id StreamID) *lpmsStream.VideoStream {
 	return self.networkStreams[id]
 }
 
+func (self *Streamer) GetAllNetworkStreams() []*lpmsStream.VideoStream {
+	streams := make([]*lpmsStream.VideoStream, 0, len(self.networkStreams))
+	for _, s := range self.networkStreams {
+		streams = append(streams, s)
+	}
+	return streams
+}
+
 func (self *Streamer) SubscribeToStream(id string) (stream *Stream, err error) {
 	streamID := StreamID(id) //MakeStreamID(nodeID, id)
 	glog.V(logger.Info).Infof("Subscribing to stream with ID: %v", streamID)
 	return self.saveStreamForId(streamID)
 }
 
-func (self *Streamer) AddNewNetworkStream() (strm *lpmsStream.VideoStream, err error) {
+func (self *Streamer) AddNewNetworkStream(format lpmsStream.VideoFormat) (strm *lpmsStream.VideoStream, err error) {
 	uid := RandomStreamID()
 	streamID := MakeStreamID(self.SelfAddress, fmt.Sprintf("%x", uid))
 
-	strm = lpmsStream.NewVideoStream(streamID.String())
+	strm = lpmsStream.NewVideoStream(streamID.String(), format)
 	self.networkStreams[streamID] = strm
 
 	// glog.V(logger.Info).Infof("Adding new video stream with ID: %v", streamID)
 	return
+}
+
+func (self *Streamer) DeleteNetworkStream(streamID StreamID) {
+	delete(self.networkStreams, streamID)
 }
 
 func (self *Streamer) AddNewStream() (stream *Stream, err error) {

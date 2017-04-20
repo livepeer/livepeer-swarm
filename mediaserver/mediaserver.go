@@ -4,6 +4,7 @@ package mediaserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -29,7 +30,6 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
 
 	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort)
-
 	server.HandleHLSPlay(
 		func(reqPath string) (*lpmsStream.HLSBuffer, error) {
 			var strmID string
@@ -76,20 +76,38 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 		},
 		//getStream
 		func(reqPath string) (lpmsStream.Stream, lpmsStream.Stream, error) {
+			var rtmpStream lpmsStream.Stream
+			var hlsStream lpmsStream.Stream
 
-			newRTMPStream, _ := streamer.AddNewNetworkStream()
-			newHLSStream, _ := streamer.AddNewNetworkStream()
-			glog.Infof("RTMP streamID is %v", newRTMPStream.GetStreamID())
-			glog.Infof("HLS streamID is %v", newHLSStream.GetStreamID())
+			if strings.HasPrefix(reqPath, "/stream/") {
+				var strmID string
+				regex, _ := regexp.Compile("\\/stream\\/([[:alpha:]]|\\d)*")
+				match := regex.FindString(reqPath)
+				if match != "" {
+					strmID = strings.Replace(match, "/stream/", "", -1)
+				}
+				if strmID != "" {
+					rtmpStream = streamer.GetNetworkStream(streaming.StreamID(strmID))
+				}
+			}
 
-			viz.LogBroadcast(newRTMPStream.GetStreamID())
-			viz.LogBroadcast(newHLSStream.GetStreamID())
+			if rtmpStream == nil {
+				rtmpStream, _ = streamer.AddNewNetworkStream(lpmsStream.RTMP)
+			}
+			hlsStream, _ = streamer.AddNewNetworkStream(lpmsStream.HLS)
+			glog.Infof("RTMP streamID is %v", rtmpStream.GetStreamID())
+			glog.Infof("HLS streamID is %v", hlsStream.GetStreamID())
 
-			return newRTMPStream, newHLSStream, nil
+			viz.LogBroadcast(rtmpStream.GetStreamID())
+			viz.LogBroadcast(hlsStream.GetStreamID())
+
+			return rtmpStream, hlsStream, nil
 		},
 		//finishStream
-		func(reqPath string) {
+		func(rtmpStrmID string, hlsStrmID string) {
 			glog.Infof("Finish Stream - canceling stream (need to implement handler for Done())")
+			streamer.DeleteNetworkStream(streaming.StreamID(rtmpStrmID))
+			streamer.DeleteNetworkStream(streaming.StreamID(hlsStrmID))
 		})
 
 	server.HandleRTMPPlay(
@@ -137,6 +155,42 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				return err
 			}
 		})
+
+	http.HandleFunc("/createStream", func(w http.ResponseWriter, r *http.Request) {
+		newRTMPStream, _ := streamer.AddNewNetworkStream(lpmsStream.RTMP)
+		res := map[string]string{"streamID": newRTMPStream.GetStreamID()}
+
+		js, err := json.Marshal(res)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		glog.Info("Created Stream: %v", js)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	})
+
+	http.HandleFunc("/localStreams", func(w http.ResponseWriter, r *http.Request) {
+		streams := streamer.GetAllNetworkStreams()
+		ret := make([]map[string]string, 0, len(streams))
+		for _, s := range streamer.GetAllNetworkStreams() {
+			if s.Format == lpmsStream.HLS {
+				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": "local"})
+			} else {
+				ret = append(ret, map[string]string{"format": "hls", "streamID": s.GetStreamID(), "source": "local"})
+			}
+		}
+
+		js, err := json.Marshal(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	})
 
 	fs := http.FileServer(http.Dir("static"))
 	fmt.Println("Serving static files from: ", fs)
