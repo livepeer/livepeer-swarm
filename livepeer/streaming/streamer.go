@@ -225,7 +225,7 @@ func (self *Streamer) GetRTMPBuffer(id string) (buf av.Demuxer) {
 
 func (self *Streamer) GetAllRTMPBufferIDs() []StreamID {
 	ids := make([]StreamID, 0, len(self.rtmpBuffers))
-	for k, _ := range self.hlsBuffers {
+	for k, _ := range self.rtmpBuffers {
 		ids = append(ids, k)
 	}
 
