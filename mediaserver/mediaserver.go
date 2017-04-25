@@ -26,10 +26,12 @@ import (
 	"github.com/nareix/joy4/av/pubsub"
 )
 
-func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
-	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
+var ErrNotFound = errors.New("NotFound")
 
-	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort)
+func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
+	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client, hive *network.Hive, ffmpegPath string) {
+
+	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, ffmpegPath)
 	server.HandleHLSPlay(
 		func(reqPath string) (*lpmsStream.HLSBuffer, error) {
 			var strmID string
@@ -39,15 +41,24 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				strmID = strings.Replace(match, "/stream/", "", -1)
 			}
 
-			if strmID == "" {
+			//Validate the stream ID format
+			sid := streaming.StreamID(strmID)
+			nodeID, streamID := sid.SplitComponents()
+
+			if strmID == "" || streamID == "" {
 				glog.Errorf("Cannot find stream for %v", reqPath)
 				return nil, errors.New("Stream Not Found")
 			}
 
 			strm := streamer.GetNetworkStream(streaming.StreamID(strmID))
 			if strm == nil {
-				glog.Infof("Cannot find HLS stream:%v locally, forwarding request to the newtork", strmID)
-				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS)
+				if streamer.SelfAddress != nodeID {
+					glog.Infof("Cannot find HLS stream:%v locally, forwarding request to the newtork", strmID)
+					forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS)
+				} else {
+					glog.Infof("Cannot find HLS stream:%v, returning 404", strmID)
+					return nil, ErrNotFound
+				}
 			} else {
 				glog.Infof("Found HLS stream:%v locally", strmID)
 			}
@@ -175,12 +186,37 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 		streams := streamer.GetAllNetworkStreams()
 		ret := make([]map[string]string, 0, len(streams))
 		for _, s := range streamer.GetAllNetworkStreams() {
-			if s.Format == lpmsStream.HLS {
-				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": "local"})
+			sid := streaming.StreamID(s.GetStreamID())
+			nodeID, _ := sid.SplitComponents()
+			var source string
+
+			if nodeID == streamer.SelfAddress {
+				source = "local"
 			} else {
-				ret = append(ret, map[string]string{"format": "hls", "streamID": s.GetStreamID(), "source": "local"})
+				source = fmt.Sprintf("%v", nodeID)
+			}
+
+			if s.Format == lpmsStream.HLS {
+				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": source})
+			} else {
+				ret = append(ret, map[string]string{"format": "hls", "streamID": s.GetStreamID(), "source": source})
 			}
 		}
+
+		js, err := json.Marshal(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	})
+
+	http.HandleFunc("/peersCount", func(w http.ResponseWriter, r *http.Request) {
+		c := hive.PeersCount()
+		ret := make(map[string]int)
+		ret["count"] = c
 
 		js, err := json.Marshal(ret)
 		if err != nil {

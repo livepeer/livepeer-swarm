@@ -49,18 +49,19 @@ type Config struct {
 	*network.HiveParams
 	Swap *swap.SwapParams
 	*network.SyncParams
-	Path      string
-	Port      string
-	PublicKey string
-	BzzKey    string
-	EnsRoot   common.Address
-	NetworkId uint64
-	RTMPPort  string
+	Path       string
+	Port       string
+	PublicKey  string
+	BzzKey     string
+	EnsRoot    common.Address
+	NetworkId  uint64
+	RTMPPort   string
+	FFMpegPath string
 }
 
 // config is agnostic to where private key is coming from
 // so managing accounts is outside swarm and left to wrappers
-func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, networkId uint64, rtmpPort string) (self *Config, err error) {
+func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, networkId uint64, rtmpPort string, ffmpegPath string) (self *Config, err error) {
 	glog.Infof("Config: RTMP Port: %v", rtmpPort)
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
 	dirpath := filepath.Join(path, "bzz-"+common.Bytes2Hex(address.Bytes()))
@@ -87,6 +88,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 		EnsRoot:       ensRootAddress,
 		NetworkId:     networkId,
 		RTMPPort:      rtmpPort,
+		FFMpegPath:    ffmpegPath,
 	}
 
 	data, err = ioutil.ReadFile(confpath)

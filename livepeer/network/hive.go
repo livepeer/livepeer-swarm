@@ -313,6 +313,10 @@ func (self *Hive) HandlePeersMsg(req *peersMsgData, from *peer) {
 	self.kad.Add(nrs)
 }
 
+func (self *Hive) PeersCount() int {
+	return len(self.kad.FindClosest(kademlia.Address{}, 0))
+}
+
 // peer wraps the protocol instance to represent a connected peer
 // it implements kademlia.Node interface
 type peer struct {

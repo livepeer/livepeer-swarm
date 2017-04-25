@@ -110,8 +110,13 @@ var (
 		Usage: "Specify RTMP streaming port",
 		Value: "1935",
 	}
+	FFMpegPathFlag = cli.StringFlag{
+		Name:  "ffmpegPath",
+		Usage: "path to ffmpeg",
+		Value: "/usr/local/bin",
+	}
 	HLSFlag = cli.BoolFlag{
-		Name: "hls",
+		Name:  "hls",
 		Usage: "True if you'd like to stream the HLS rendition",
 	}
 	MetricsEnabledFlag = cli.BoolFlag{
@@ -199,6 +204,7 @@ The output of this command is supposed to be machine-readable.
 		SwarmUploadDefaultPath,
 		// streaming flags
 		RTMPFlag,
+		FFMpegPathFlag,
 		HLSFlag,
 		MetricsEnabledFlag,
 		VizEnabledFlag,
@@ -288,9 +294,9 @@ func stream(ctx *cli.Context) error {
 			fmt.Println("Need an rtmp port")
 			os.Exit(1)
 		}
-		
-		port = strconv.Itoa(numericPort + 7000)  // HLS port is 7000 + RTMP by default
-		
+
+		port = strconv.Itoa(numericPort + 7000) // HLS port is 7000 + RTMP by default
+
 		rtmpURL = fmt.Sprintf("http://localhost:%v/stream/%v.m3u8", port, streamID)
 	} else {
 		rtmpURL = fmt.Sprintf("rtmp://localhost:%v/stream/%v", port, streamID)
@@ -335,7 +341,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node, viz *streamingVizCli
 		bzzdir = stack.InstanceDir()
 	}
 
-	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(LivepeerNetworkIdFlag.Name), ctx.GlobalString(RTMPFlag.Name))
+	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(LivepeerNetworkIdFlag.Name), ctx.GlobalString(RTMPFlag.Name), ctx.GlobalString(FFMpegPathFlag.Name))
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
 	}
