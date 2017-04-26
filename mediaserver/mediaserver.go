@@ -60,7 +60,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 					return nil, ErrNotFound
 				}
 			} else {
-				glog.Infof("Found HLS stream:%v locally", strmID)
+				// glog.Infof("Found HLS stream:%v locally", strmID)
 			}
 
 			hlsBuffer := streamer.GetHLSMuxer(strmID)
@@ -75,7 +75,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 					return nil, err
 				}
 			}
-			glog.Infof("Buffer subscribed to local stream:%v ", strmID)
+			// glog.Infof("Buffer subscribed to local stream:%v ", strmID)
 
 			return hlsBuffer.(*lpmsStream.HLSBuffer), nil
 		})
@@ -197,9 +197,9 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			}
 
 			if s.Format == lpmsStream.HLS {
-				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": source})
-			} else {
 				ret = append(ret, map[string]string{"format": "hls", "streamID": s.GetStreamID(), "source": source})
+			} else {
+				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": source})
 			}
 		}
 
