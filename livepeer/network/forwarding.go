@@ -18,7 +18,6 @@ package network
 
 import (
 	"math/rand"
-	"runtime/debug"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -118,6 +117,10 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 func (self *forwarder) Stream(id string, peerAddr kademlia.Address, format lpmsStream.VideoFormat) {
 	s := streaming.StreamID(id)
 	nodeID, streamID := s.SplitComponents()
+	if streamID == "" {
+		glog.Errorf("Illegal stream ID: %v", id)
+		return
+	}
 	msg := &streamRequestMsgData{
 		OriginNode: nodeID,
 		StreamID:   streamID,
@@ -140,7 +143,6 @@ func (self *forwarder) Stream(id string, peerAddr kademlia.Address, format lpmsS
 		p = peers[0]
 	} else {
 		glog.V(logger.Error).Infof("ERROR: Stream Request Sent To %d Peers\n", len(peers))
-		debug.PrintStack()
 		return
 	}
 

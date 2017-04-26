@@ -46,6 +46,9 @@ func (self *StreamID) String() string {
 func (self *StreamID) SplitComponents() (common.Hash, string) {
 	strStreamID := string(*self)
 	originComponentLength := common.HashLength * 2 // 32 bytes == 64 hexadecimal digits
+	if len(strStreamID) != (originComponentLength * 2) {
+		return common.Hash{}, ""
+	}
 	return common.HexToHash(strStreamID[:originComponentLength]), strStreamID[originComponentLength:]
 }
 

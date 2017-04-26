@@ -39,7 +39,11 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				strmID = strings.Replace(match, "/stream/", "", -1)
 			}
 
-			if strmID == "" {
+			//Validate the stream ID format
+			sid := streaming.StreamID(strmID)
+			_, streamID := sid.SplitComponents()
+
+			if strmID == "" || streamID == "" {
 				glog.Errorf("Cannot find stream for %v", reqPath)
 				return nil, errors.New("Stream Not Found")
 			}
@@ -49,7 +53,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				glog.Infof("Cannot find HLS stream:%v locally, forwarding request to the newtork", strmID)
 				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS)
 			} else {
-				glog.Infof("Found HLS stream:%v locally", strmID)
+				// glog.Infof("Found HLS stream:%v locally", strmID)
 			}
 
 			hlsBuffer := streamer.GetHLSMuxer(strmID)
@@ -64,7 +68,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 					return nil, err
 				}
 			}
-			glog.Infof("Buffer subscribed to local stream:%v ", strmID)
+			// glog.Infof("Buffer subscribed to local stream:%v ", strmID)
 
 			return hlsBuffer.(*lpmsStream.HLSBuffer), nil
 		})
@@ -175,10 +179,18 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 		streams := streamer.GetAllNetworkStreams()
 		ret := make([]map[string]string, 0, len(streams))
 		for _, s := range streamer.GetAllNetworkStreams() {
-			if s.Format == lpmsStream.HLS {
-				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": "local"})
+			sid := streaming.StreamID(s.GetStreamID())
+			nodeID, _ := sid.SplitComponents()
+			var source string
+			if nodeID == streamer.SelfAddress {
+				source = "local"
 			} else {
-				ret = append(ret, map[string]string{"format": "hls", "streamID": s.GetStreamID(), "source": "local"})
+				source = nodeID.Str()
+			}
+			if s.Format == lpmsStream.HLS {
+				ret = append(ret, map[string]string{"format": "hls", "streamID": s.GetStreamID(), "source": source})
+			} else {
+				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": source})
 			}
 		}
 
