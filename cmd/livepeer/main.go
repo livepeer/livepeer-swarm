@@ -113,7 +113,7 @@ var (
 	FFMpegPathFlag = cli.StringFlag{
 		Name:  "ffmpegPath",
 		Usage: "path to ffmpeg",
-		Value: "/usr/local/bin",
+		Value: "",
 	}
 	HLSFlag = cli.BoolFlag{
 		Name:  "hls",
