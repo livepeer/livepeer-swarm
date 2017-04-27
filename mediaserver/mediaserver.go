@@ -29,18 +29,14 @@ import (
 
 var ErrNotFound = errors.New("NotFound")
 
-func startHlsUnsubscribeWorker(hlsSubTimer *map[streaming.StreamID]time.Time, cancellation *map[streaming.StreamID]context.CancelFunc, streamer *streaming.Streamer, forwarder storage.CloudStore, limit time.Duration) {
+func startHlsUnsubscribeWorker(hlsSubTimer map[streaming.StreamID]time.Time, streamer *streaming.Streamer, forwarder storage.CloudStore, limit time.Duration) {
 	for {
 		time.Sleep(time.Second * 5)
-		for sid, t := range *hlsSubTimer {
+		for sid, t := range hlsSubTimer {
 			if time.Since(t) > limit {
 				streamer.UnsubscribeToHLSStream(sid.String(), "local")
 				forwarder.StopStream(sid.String(), kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS) //This could fail if it's a local stream, but it's ok.
-				delete(*hlsSubTimer, sid)
-
-				if !streamer.HasSubscribers(sid.String()) {
-					(*cancellation)[sid]() //Call cancel on the subscribe worker
-				}
+				delete(hlsSubTimer, sid)
 			}
 		}
 	}
@@ -50,8 +46,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client, hive *network.Hive, ffmpegPath string) {
 
 	hlsSubTimer := make(map[streaming.StreamID]time.Time)
-	cancellation := make(map[streaming.StreamID]context.CancelFunc)
-	go startHlsUnsubscribeWorker(&hlsSubTimer, &cancellation, streamer, forwarder, time.Second*10)
+	go startHlsUnsubscribeWorker(hlsSubTimer, streamer, forwarder, time.Second*10)
 
 	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, ffmpegPath)
 
@@ -90,10 +85,8 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			if hlsBuffer == nil {
 				glog.Infof("Creating new HLS buffer")
 				hlsBuffer = lpmsStream.NewHLSBuffer()
-				ctx, cancel := context.WithCancel(context.Background())
-				cancellation[streaming.StreamID(strmID)] = cancel
 				subID := "local"
-				err := streamer.SubscribeToHLSStream(ctx, strmID, subID, hlsBuffer)
+				err := streamer.SubscribeToHLSStream(strmID, subID, hlsBuffer)
 				if err != nil {
 					glog.Errorf("Error subscribing to hls stream:%v", reqPath)
 					return nil, err
@@ -175,7 +168,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			q := pubsub.NewQueue()
 			subID := streaming.RandomStreamID().Str()
 
-			err := streamer.SubscribeToRTMPStream(ctx, strmID, subID, q)
+			err := streamer.SubscribeToRTMPStream(strmID, subID, q)
 			if err != nil {
 				glog.Errorf("Error subscribing to stream %v", err)
 				return err

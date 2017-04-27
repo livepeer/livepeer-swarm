@@ -32,7 +32,6 @@ The bzz protocol component speaks the bzz protocol
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -306,7 +305,6 @@ func (self *bzz) handle() error {
 		concatedStreamID := streaming.MakeStreamID(originNode, streamID)
 
 		strm := self.streamer.GetNetworkStream(concatedStreamID)
-		ctx := context.Background()
 
 		if req.Id == streaming.RequestStreamMsgID {
 			if strm == nil {
@@ -318,10 +316,10 @@ func (self *bzz) handle() error {
 			mux := &peerMuxer{peer: &peer{bzz: self}, originNode: originNode, streamID: streamID}
 			if req.Format == lpmsStream.HLS {
 				glog.Infof("Subscribing remote host %v to HLS stream", self.remoteAddr.String())
-				self.streamer.SubscribeToHLSStream(ctx, concatedStreamID.String(), self.remoteAddr.String(), mux)
+				self.streamer.SubscribeToHLSStream(concatedStreamID.String(), self.remoteAddr.String(), mux)
 			} else {
 				glog.Infof("Subscribing remote host %v to RTMP stream", self.remoteAddr.String())
-				self.streamer.SubscribeToRTMPStream(ctx, concatedStreamID.String(), self.remoteAddr.String(), mux)
+				self.streamer.SubscribeToRTMPStream(concatedStreamID.String(), self.remoteAddr.String(), mux)
 			}
 
 		} else if req.Id == streaming.DeliverStreamMsgID {

@@ -226,11 +226,8 @@ func TestUnsubscribeToHLS(t *testing.T) {
 		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	b := lpmsStream.NewHLSBuffer()
-	err := streamer.SubscribeToHLSStream(ctx, id.String(), "local", b)
+	err := streamer.SubscribeToHLSStream(id.String(), "local", b)
 
 	if err != nil {
 		t.Errorf("Got error %v subscribing to stream", err)

@@ -240,7 +240,7 @@ func (self *Streamer) GetAllRTMPBufferIDs() []StreamID {
 
 //Subscribes to a RTMP stream.  This function should be called in combination with forwarder.stream(), or another mechanism that will
 //populate the VideoStream associated with the id.
-func (self *Streamer) SubscribeToRTMPStream(ctx context.Context, strmID string, subID string, mux av.Muxer) (err error) {
+func (self *Streamer) SubscribeToRTMPStream(strmID string, subID string, mux av.Muxer) (err error) {
 	strm := self.networkStreams[StreamID(strmID)]
 	if strm == nil {
 		//Create VideoStream
@@ -258,7 +258,7 @@ func (self *Streamer) SubscribeToRTMPStream(ctx context.Context, strmID string, 
 		self.cancellation[StreamID(strmID)] = cancel
 	}
 
-	go sub.SubscribeRTMP(ctx, subID, mux)
+	go sub.SubscribeRTMP(subID, mux)
 
 	return nil
 }
@@ -283,7 +283,7 @@ func (self *Streamer) GetAllHLSMuxerIDs() []StreamID {
 	return ids
 }
 
-func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string, mux lpmsStream.HLSMuxer) error {
+func (self *Streamer) SubscribeToHLSStream(strmID string, subID string, mux lpmsStream.HLSMuxer) error {
 	strm := self.networkStreams[StreamID(strmID)]
 	if strm == nil {
 		strm = lpmsStream.NewVideoStream(strmID, lpmsStream.HLS)
@@ -307,6 +307,8 @@ func (self *Streamer) UnsubscribeToHLSStream(strmID string, subID string) {
 	sub := self.subscribers[StreamID(strmID)]
 	if sub != nil {
 		sub.UnsubscribeHLS(subID)
+	} else {
+		return
 	}
 
 	if !sub.HasSubscribers() {
@@ -320,6 +322,8 @@ func (self *Streamer) UnsubscribeToRTMPStream(strmID string, subID string) {
 	sub := self.subscribers[StreamID(strmID)]
 	if sub != nil {
 		sub.UnsubscribeRTMP(subID)
+	} else {
+		return
 	}
 
 	if !sub.HasSubscribers() {
