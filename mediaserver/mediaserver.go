@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -28,10 +29,32 @@ import (
 
 var ErrNotFound = errors.New("NotFound")
 
+func startHlsUnsubscribeWorker(hlsSubTimer *map[streaming.StreamID]time.Time, cancellation *map[streaming.StreamID]context.CancelFunc, streamer *streaming.Streamer, forwarder storage.CloudStore, limit time.Duration) {
+	for {
+		time.Sleep(time.Second * 5)
+		for sid, t := range *hlsSubTimer {
+			if time.Since(t) > limit {
+				streamer.UnsubscribeToHLSStream(sid.String(), "local")
+				forwarder.StopStream(sid.String(), kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS) //This could fail if it's a local stream, but it's ok.
+				delete(*hlsSubTimer, sid)
+
+				if !streamer.HasSubscribers(sid.String()) {
+					(*cancellation)[sid]() //Call cancel on the subscribe worker
+				}
+			}
+		}
+	}
+}
+
 func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
 	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client, hive *network.Hive, ffmpegPath string) {
 
+	hlsSubTimer := make(map[streaming.StreamID]time.Time)
+	cancellation := make(map[streaming.StreamID]context.CancelFunc)
+	go startHlsUnsubscribeWorker(&hlsSubTimer, &cancellation, streamer, forwarder, time.Second*10)
+
 	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, ffmpegPath)
+
 	server.HandleHLSPlay(
 		func(reqPath string) (*lpmsStream.HLSBuffer, error) {
 			var strmID string
@@ -67,7 +90,8 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			if hlsBuffer == nil {
 				glog.Infof("Creating new HLS buffer")
 				hlsBuffer = lpmsStream.NewHLSBuffer()
-				ctx := context.Background()
+				ctx, cancel := context.WithCancel(context.Background())
+				cancellation[streaming.StreamID(strmID)] = cancel
 				subID := "local"
 				err := streamer.SubscribeToHLSStream(ctx, strmID, subID, hlsBuffer)
 				if err != nil {
@@ -76,6 +100,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				}
 			}
 			// glog.Infof("Buffer subscribed to local stream:%v ", strmID)
+			hlsSubTimer[streaming.StreamID(strmID)] = time.Now()
 
 			return hlsBuffer.(*lpmsStream.HLSBuffer), nil
 		})

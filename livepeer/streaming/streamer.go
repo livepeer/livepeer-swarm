@@ -201,21 +201,24 @@ type Streamer struct {
 	Streams        map[StreamID]*Stream
 	networkStreams map[StreamID]*lpmsStream.VideoStream
 	subscribers    map[StreamID]*lpmsStream.StreamSubscriber
+	cancellation   map[StreamID]context.CancelFunc
 	hlsBuffers     map[StreamID]lpmsStream.HLSMuxer
 	rtmpBuffers    map[StreamID]*pubsub.Queue
 	SelfAddress    common.Hash
 }
 
 func NewStreamer(selfAddress common.Hash) (*Streamer, error) {
-	glog.V(logger.Info).Infof("Setting up new streamer with self address: %x", selfAddress[:])
-	return &Streamer{
+	glog.Infof("Setting up new streamer with self address: %x", selfAddress[:])
+	s := &Streamer{
 		Streams:        make(map[StreamID]*Stream),
 		networkStreams: make(map[StreamID]*lpmsStream.VideoStream),
 		subscribers:    make(map[StreamID]*lpmsStream.StreamSubscriber),
+		cancellation:   make(map[StreamID]context.CancelFunc),
 		hlsBuffers:     make(map[StreamID]lpmsStream.HLSMuxer),
 		rtmpBuffers:    make(map[StreamID]*pubsub.Queue),
 		SelfAddress:    selfAddress,
-	}, nil
+	}
+	return s, nil
 }
 
 func (self *Streamer) GetRTMPBuffer(id string) (buf av.Demuxer) {
@@ -250,7 +253,9 @@ func (self *Streamer) SubscribeToRTMPStream(ctx context.Context, strmID string, 
 		//Create Subscriber, start worker
 		sub = lpmsStream.NewStreamSubscriber(strm)
 		self.subscribers[StreamID(strmID)] = sub
+		ctx, cancel := context.WithCancel(context.Background())
 		go sub.StartRTMPWorker(ctx)
+		self.cancellation[StreamID(strmID)] = cancel
 	}
 
 	go sub.SubscribeRTMP(ctx, subID, mux)
@@ -278,10 +283,6 @@ func (self *Streamer) GetAllHLSMuxerIDs() []StreamID {
 	return ids
 }
 
-// func (self *Streamer) GetHLSSubscription(subID string) (mux lpmsStream.HLSMuxer) {
-// 	return nil
-// }
-
 func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string, mux lpmsStream.HLSMuxer) error {
 	strm := self.networkStreams[StreamID(strmID)]
 	if strm == nil {
@@ -293,7 +294,9 @@ func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, s
 	if sub == nil {
 		sub = lpmsStream.NewStreamSubscriber(strm)
 		self.subscribers[StreamID(strmID)] = sub
+		ctx, cancel := context.WithCancel(context.Background())
 		go sub.StartHLSWorker(ctx)
+		self.cancellation[StreamID(strmID)] = cancel
 	}
 
 	self.hlsBuffers[StreamID(strmID)] = mux
@@ -305,6 +308,12 @@ func (self *Streamer) UnsubscribeToHLSStream(strmID string, subID string) {
 	if sub != nil {
 		sub.UnsubscribeHLS(subID)
 	}
+
+	if !sub.HasSubscribers() {
+		self.cancellation[StreamID(strmID)]() //Call cancel on hls worker
+		delete(self.subscribers, StreamID(strmID))
+		delete(self.networkStreams, StreamID(strmID))
+	}
 }
 
 func (self *Streamer) UnsubscribeToRTMPStream(strmID string, subID string) {
@@ -312,6 +321,20 @@ func (self *Streamer) UnsubscribeToRTMPStream(strmID string, subID string) {
 	if sub != nil {
 		sub.UnsubscribeRTMP(subID)
 	}
+
+	if !sub.HasSubscribers() {
+		self.cancellation[StreamID(strmID)]() //Call cancel on hls worker
+		delete(self.subscribers, StreamID(strmID))
+		delete(self.networkStreams, StreamID(strmID))
+	}
+}
+
+func (self *Streamer) HasSubscribers(strmID string) bool {
+	sub := self.subscribers[StreamID(strmID)]
+	if sub != nil {
+		return sub.HasSubscribers()
+	}
+	return false
 }
 
 // func (self *Streamer) SubscribeToHLSStream(ctx context.Context, strmID string, subID string) (buf *lpmsStream.HLSBuffer, err error) {

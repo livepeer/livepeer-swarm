@@ -2,6 +2,7 @@ package streaming
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -139,9 +140,8 @@ func TestSubscribeToRTMP(t *testing.T) {
 	go func() { ec <- strm.WriteRTMPToStream(ctx, &TestQueue{c: &Counter{Count: 10}}) }()
 
 	select {
-	case <-ec:
-		// case err := <-ec:
-		// fmt.Printf("Got err: %v\n", err)
+	case err := <-ec:
+		fmt.Printf("Got err: %v\n", err)
 	}
 
 	time.Sleep(1 * time.Second) //This is a terrible hack... But we have no way of blocking for SubscribeToRTMPStream until a EOF.  Need to be fixed
@@ -169,11 +169,8 @@ func TestSubscribeToHLS(t *testing.T) {
 	streamer, _ := NewStreamer(addr)
 	id := MakeStreamID(addr, streamID.Str())
 
-	// bufLen := len(streamer.hlsBuffers)
 	streamsLen := len(streamer.networkStreams)
-	// if bufLen != 0 {
-	// 	t.Errorf("Expecting length of 0 for buffer, got %v", bufLen)
-	// }
+
 	if streamsLen != 0 {
 		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
 	}
@@ -187,17 +184,12 @@ func TestSubscribeToHLS(t *testing.T) {
 		t.Errorf("Got error when subscribing to hls stream: %v", err)
 	}
 
-	// bufLen = len(streamer.hlsBuffers)
 	streamsLen = len(streamer.networkStreams)
-	// if bufLen != 1 {
-	// 	t.Errorf("Expecting length of 1 for buffer, got %v", bufLen)
-	// }
 
 	if streamsLen != 1 {
 		t.Errorf("Expecting length of 1 for streams, got %v", streamsLen)
 	}
 
-	// go func() { //Populate the stream
 	strm := streamer.GetNetworkStream(id)
 	pl, _ := m3u8.NewMediaPlaylist(15, 15)
 	pl.Segments[0] = &m3u8.MediaSegment{URI: "seg1"}
@@ -205,18 +197,8 @@ func TestSubscribeToHLS(t *testing.T) {
 	strm.WriteHLSPlaylistToStream(*pl)
 	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg1", Data: []byte("data1")})
 	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg2", Data: []byte("data2")})
-	// 	cancel()
-	// }()
 
-	//Wait for the cancel to be finished
-	// select {
-	// case <-ctx.Done():
-	// }
-
-	// ctx := context.Background()
-	// fmt.Println("Before Wait and Pop")
 	bpl, _ := b.WaitAndPopPlaylist(ctx)
-	// fmt.Println("After Wait and Pop")
 	bseg1, _ := b.WaitAndPopSegment(ctx, "seg1")
 	bseg2, _ := b.WaitAndPopSegment(ctx, "seg2")
 
@@ -230,5 +212,44 @@ func TestSubscribeToHLS(t *testing.T) {
 
 	if bytes.Compare(bseg2, []byte("data2")) != 0 {
 		t.Errorf("Segment name shoudl be data2, but got %v", bseg2)
+	}
+}
+
+func TestUnsubscribeToHLS(t *testing.T) {
+	addr := RandomStreamID()
+	streamID := RandomStreamID()
+	streamer, _ := NewStreamer(addr)
+	id := MakeStreamID(addr, streamID.Str())
+
+	streamsLen := len(streamer.networkStreams)
+	if streamsLen != 0 {
+		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	b := lpmsStream.NewHLSBuffer()
+	err := streamer.SubscribeToHLSStream(ctx, id.String(), "local", b)
+
+	if err != nil {
+		t.Errorf("Got error %v subscribing to stream", err)
+	}
+
+	streamsLen = len(streamer.networkStreams)
+	if streamsLen != 1 {
+		t.Errorf("Expecting 1 stream, got %v", streamsLen)
+	}
+
+	streamer.UnsubscribeToHLSStream(id.String(), "local")
+
+	streamsLen = len(streamer.networkStreams)
+	if streamsLen != 0 {
+		t.Errorf("Expecting 0 stream, got %v", streamsLen)
+	}
+
+	subLen := len(streamer.subscribers)
+	if subLen != 0 {
+		t.Errorf("Expecting 0 subscribers, got %v", subLen)
 	}
 }

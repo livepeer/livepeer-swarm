@@ -74,6 +74,7 @@ const (
 	ErrSync
 	ErrUnwanted
 	ErrTranscode
+	ErrStream
 )
 
 var errorToString = map[int]string{
@@ -87,6 +88,8 @@ var errorToString = map[int]string{
 	ErrSwap:              "SWAP error",
 	ErrSync:              "Sync error",
 	ErrUnwanted:          "Unwanted peer",
+	ErrTranscode:         "Transcoding error",
+	ErrStream:            "Streaming error",
 }
 
 // bzz represents the swarm wire protocol
@@ -271,7 +274,7 @@ func (self *bzz) handle() error {
 		streamID := req.StreamID
 		concatedStreamID := streaming.MakeStreamID(originNode, streamID)
 
-		glog.V(logger.Info).Infof("Stop Stream Request %v", streamID)
+		glog.Infof("Stop Stream Request %v", streamID)
 
 		if req.Id == streaming.StopStreamMsgID {
 			h := common.Hash(self.selfAddr().Addr)
@@ -280,24 +283,12 @@ func (self *bzz) handle() error {
 				(*self.forwarder).StopStream(string(concatedStreamID), self.remoteAddr.Addr, req.Format)
 			}
 			if req.Format == lpmsStream.HLS {
-				glog.V(logger.Info).Infof("Removing remote host %v from HLS subscription", self.remoteAddr.Addr.String())
-				self.streamer.UnsubscribeToHLSStream(concatedStreamID.String(), self.remoteAddr.Addr.String())
+				glog.Infof("Removing remote host %v from HLS subscription", self.remoteAddr.String())
+				self.streamer.UnsubscribeToHLSStream(concatedStreamID.String(), self.remoteAddr.String())
 			} else {
-				glog.V(logger.Info).Infof("Removing remote host %v from RTMP subscription", self.remoteAddr.Addr.String())
-				self.streamer.UnsubscribeToRTMPStream(concatedStreamID.String(), self.remoteAddr.Addr.String())
+				glog.V(logger.Info).Infof("Removing remote host %v from RTMP subscription", self.remoteAddr.String())
+				self.streamer.UnsubscribeToRTMPStream(concatedStreamID.String(), self.remoteAddr.String())
 			}
-
-			// self.streamDB.RemoveDownstreamPeer(concatedStreamID, &peer{bzz: self})
-
-			// Don't delete the stream for now - may not need to
-			// if stream == nil {
-			// 	glog.V(logger.Error).Infof("Cannot find local stream to stop...")
-			// } else {
-			// 	if len(self.streamDB.DownstreamRequesters[concatedStreamID]) == 0 {
-			// 		glog.V(logger.Error).Infof("No more downstream requesters for %v, deleting stream", concatedStreamID)
-			// 		self.streamer.DeleteStream(stream.ID)
-			// 	}
-			// }
 
 		} else {
 			glog.V(logger.Error).Infof("Unrecognized request in stopStreamRequestMsg: ", req)
@@ -336,6 +327,7 @@ func (self *bzz) handle() error {
 		} else if req.Id == streaming.DeliverStreamMsgID {
 			if strm == nil {
 				glog.Errorf("Received a video chunk but cannot find stream: %v", concatedStreamID)
+				return self.protoError(ErrStream, "Received a video chunk but cannot find stream: %v", concatedStreamID)
 			}
 			chunk := streaming.ByteArrInVideoChunk(req.SData)
 			err = insertChunkToStream(chunk, strm)
@@ -678,6 +670,7 @@ func (self *bzz) String() string {
 }
 
 func insertChunkToStream(chunk streaming.VideoChunk, strm *lpmsStream.VideoStream) error {
+	glog.Infof("Inserting chunk to %v", strm.GetStreamID())
 	switch {
 	case chunk.M3U8 != nil:
 		p, _ := m3u8.NewMediaPlaylist(50000, 50000)
@@ -812,7 +805,7 @@ func (self *bzz) send(msg uint64, data interface{}) error {
 	glog.V(logger.Detail).Infof("-> %v: %v (%T) to %v", msg, data, data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {
-		fmt.Println("Error sending in protocol: ", err)
+		glog.Errorf("Error sending in protocol: %v", err)
 		self.Drop()
 	}
 	return err
