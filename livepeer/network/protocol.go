@@ -671,14 +671,23 @@ func insertChunkToStream(chunk streaming.VideoChunk, strm *lpmsStream.VideoStrea
 	glog.Infof("Inserting chunk to %v", strm.GetStreamID())
 	switch {
 	case chunk.M3U8 != nil:
-		p, _ := m3u8.NewMediaPlaylist(50000, 50000)
+		p, _ := m3u8.NewMediaPlaylist(5, 50000)
 		err := p.DecodeFrom(bytes.NewReader(chunk.M3U8), true)
 		if err != nil {
 			glog.Errorf("Error decoding HLS playlist")
 		}
-		strm.WriteHLSPlaylistToStream(*p)
+		// glog.Infof("Inserting pl to %v", strm.GetStreamID())
+
+		err = strm.WriteHLSPlaylistToStream(*p)
+		if err != nil {
+			glog.Errorf("Error inserting pl to stream: %v", err)
+		}
 	case chunk.HLSSegData != nil:
-		strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: chunk.HLSSegName, Data: chunk.HLSSegData})
+		// glog.Infof("Inserting seg %v to %v", chunk.HLSSegName, strm.GetStreamID())
+		err := strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: chunk.HLSSegName, Data: chunk.HLSSegData})
+		if err != nil {
+			glog.Errorf("Error inserting seg to stream: %v", err)
+		}
 	case chunk.HeaderStreams != nil:
 		strm.WriteRTMPHeader(chunk.HeaderStreams)
 	case chunk.Packet.Data != nil:
