@@ -28,6 +28,8 @@ import (
 )
 
 var ErrNotFound = errors.New("NotFound")
+var HLSWaitTime = time.Second * 10
+var HLSBufferCap = uint(10)
 
 func startHlsUnsubscribeWorker(hlsSubTimer map[streaming.StreamID]time.Time, streamer *streaming.Streamer, forwarder storage.CloudStore, limit time.Duration) {
 	for {
@@ -84,18 +86,32 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			hlsBuffer := streamer.GetHLSMuxer(strmID)
 			if hlsBuffer == nil {
 				glog.Infof("Creating new HLS buffer")
-				hlsBuffer = lpmsStream.NewHLSBuffer()
+				hlsBuffer = lpmsStream.NewHLSBuffer(HLSBufferCap)
 				subID := "local"
 				err := streamer.SubscribeToHLSStream(strmID, subID, hlsBuffer)
 				if err != nil {
 					glog.Errorf("Error subscribing to hls stream:%v", reqPath)
 					return nil, err
 				}
+			} else {
+				glog.Infof("Found HLS buffer for %v", reqPath)
 			}
 			// glog.Infof("Buffer subscribed to local stream:%v ", strmID)
-			hlsSubTimer[streaming.StreamID(strmID)] = time.Now()
 
-			return hlsBuffer.(*lpmsStream.HLSBuffer), nil
+			startTime := time.Now()
+			for {
+				_, err := hlsBuffer.(*lpmsStream.HLSBuffer).GeneratePlaylist()
+				if err == nil {
+					hlsSubTimer[streaming.StreamID(strmID)] = time.Now()
+					return hlsBuffer.(*lpmsStream.HLSBuffer), nil
+				} else {
+					glog.Errorf("Error generating pl: %v", err)
+				}
+				time.Sleep(time.Second * 2) //Sleep for 2 seconds so the segments start to get to the buffer
+				if time.Since(startTime) > HLSWaitTime {
+					return nil, ErrNotFound
+				}
+			}
 		})
 
 	server.HandleRTMPPublish(

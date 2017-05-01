@@ -2,7 +2,6 @@ package network
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/golang/glog"
 	"github.com/kz26/m3u8"
 	"github.com/livepeer/go-livepeer/livepeer/streaming"
 	lpmsStream "github.com/livepeer/lpms/stream"
@@ -16,7 +15,7 @@ type peerMuxer struct {
 }
 
 func (p *peerMuxer) WritePlaylist(pl m3u8.MediaPlaylist) error {
-	glog.Infof("Writing pl to peer", p.peer.Addr())
+	// glog.Infof("Writing pl to peer", p.peer.Addr())
 	chunk := streaming.VideoChunk{
 		ID:   streaming.DeliverStreamMsgID,
 		M3U8: pl.Encode().Bytes(),
@@ -33,7 +32,7 @@ func (p *peerMuxer) WritePlaylist(pl m3u8.MediaPlaylist) error {
 }
 
 func (p *peerMuxer) WriteSegment(name string, s []byte) error {
-	glog.Infof("Writing segment to peer %v", p.peer.Addr())
+	// glog.Infof("Writing segment to peer %v", p.peer.Addr())
 	chunk := streaming.VideoChunk{
 		ID:         streaming.DeliverStreamMsgID,
 		HLSSegData: s,
@@ -84,7 +83,7 @@ func (p *peerMuxer) WritePacket(pkt av.Packet) error {
 }
 
 func (p *peerMuxer) WriteTrailer() error {
-	glog.Infof("Writing trailer to peer")
+	// glog.Infof("Writing trailer to peer")
 	chunk := streaming.VideoChunk{
 		ID: streaming.EOFStreamMsgID,
 	}

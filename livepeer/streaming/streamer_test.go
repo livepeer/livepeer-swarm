@@ -1,16 +1,14 @@
 package streaming
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"testing"
 	"time"
 
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/kz26/m3u8"
 	lpmsStream "github.com/livepeer/lpms/stream"
 	"github.com/nareix/joy4/av"
 )
@@ -127,7 +125,8 @@ func TestSubscribeToRTMP(t *testing.T) {
 	}
 
 	q := &TestQueue{c: &Counter{Count: 0}}
-	streamer.SubscribeToRTMPStream(context.Background(), id.String(), "test", q)
+	ctx := context.Background()
+	streamer.SubscribeToRTMPStream(id.String(), "test", q)
 
 	streamsLen = len(streamer.networkStreams)
 	if streamsLen != 1 {
@@ -135,7 +134,6 @@ func TestSubscribeToRTMP(t *testing.T) {
 	}
 
 	strm := streamer.GetNetworkStream(id)
-	ctx := context.Background()
 	ec := make(chan error)
 	go func() { ec <- strm.WriteRTMPToStream(ctx, &TestQueue{c: &Counter{Count: 10}}) }()
 
@@ -175,11 +173,11 @@ func TestSubscribeToHLS(t *testing.T) {
 		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	b := lpmsStream.NewHLSBuffer()
-	err := streamer.SubscribeToHLSStream(ctx, id.String(), "local", b)
+	b := lpmsStream.NewHLSBuffer(100)
+	err := streamer.SubscribeToHLSStream(id.String(), "local", b)
 	if err != nil {
 		t.Errorf("Got error when subscribing to hls stream: %v", err)
 	}
@@ -191,19 +189,22 @@ func TestSubscribeToHLS(t *testing.T) {
 	}
 
 	strm := streamer.GetNetworkStream(id)
-	pl, _ := m3u8.NewMediaPlaylist(15, 15)
-	pl.Segments[0] = &m3u8.MediaSegment{URI: "seg1"}
-	pl.Segments[1] = &m3u8.MediaSegment{URI: "seg2"}
-	strm.WriteHLSPlaylistToStream(*pl)
-	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg1", Data: []byte("data1")})
-	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg2", Data: []byte("data2")})
+	// pl, _ := m3u8.NewMediaPlaylist(15, 15)
+	// pl.Segments[0] = &m3u8.MediaSegment{URI: "seg_1.ts"}
+	// pl.Segments[1] = &m3u8.MediaSegment{URI: "seg_2.ts"}
+	// strm.WriteHLSPlaylistToStream(*pl)
+	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg_1.ts", Data: []byte("data1")})
+	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg_2.ts", Data: []byte("data2")})
 
-	bpl, _ := b.WaitAndPopPlaylist(ctx)
-	bseg1, _ := b.WaitAndPopSegment(ctx, "seg1")
-	bseg2, _ := b.WaitAndPopSegment(ctx, "seg2")
+	time.Sleep(time.Millisecond * 200) //Sleep to wait for the segment to propagate. This is a total hack.
 
-	if len(bpl.Segments) != 15 {
-		t.Errorf("Playlist length should be 15, but got %v", len(bpl.Segments))
+	// bpl, _ := b.WaitAndPopPlaylist(ctx)
+	bpl, _ := b.GeneratePlaylist()
+	bseg1, _ := b.WaitAndPopSegment(ctx, "seg_1.ts")
+	bseg2, _ := b.WaitAndPopSegment(ctx, "seg_2.ts")
+
+	if len(bpl.Segments) != 2 {
+		t.Errorf("Playlist length should be 2, but got %v", len(bpl.Segments))
 	}
 
 	if bytes.Compare(bseg1, []byte("data1")) != 0 {
@@ -226,7 +227,7 @@ func TestUnsubscribeToHLS(t *testing.T) {
 		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
 	}
 
-	b := lpmsStream.NewHLSBuffer()
+	b := lpmsStream.NewHLSBuffer(100)
 	err := streamer.SubscribeToHLSStream(id.String(), "local", b)
 
 	if err != nil {

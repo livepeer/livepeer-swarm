@@ -25,6 +25,8 @@ import (
 type StreamID string
 type TranscodeID string
 
+const HLSWaitTime = time.Second * 10
+
 func RandomStreamID() common.Hash {
 	rand.Seed(time.Now().UnixNano())
 	var x common.Hash
@@ -295,7 +297,7 @@ func (self *Streamer) SubscribeToHLSStream(strmID string, subID string, mux lpms
 		sub = lpmsStream.NewStreamSubscriber(strm)
 		self.subscribers[StreamID(strmID)] = sub
 		ctx, cancel := context.WithCancel(context.Background())
-		go sub.StartHLSWorker(ctx)
+		go sub.StartHLSWorker(ctx, HLSWaitTime)
 		self.cancellation[StreamID(strmID)] = cancel
 	}
 

@@ -115,6 +115,7 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 
 // Stream request - this is to request for a stream, not to do broadcast.  The chunks should arrive in protocol.go
 func (self *forwarder) Stream(id string, peerAddr kademlia.Address, format lpmsStream.VideoFormat) {
+	glog.Infof("Sending Stream Request: %v", peerAddr)
 	s := streaming.StreamID(id)
 	nodeID, streamID := s.SplitComponents()
 	if streamID == "" {
