@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -26,10 +27,29 @@ import (
 	"github.com/nareix/joy4/av/pubsub"
 )
 
-func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
-	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client) {
+var ErrNotFound = errors.New("NotFound")
 
-	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort)
+func startHlsUnsubscribeWorker(hlsSubTimer map[streaming.StreamID]time.Time, streamer *streaming.Streamer, forwarder storage.CloudStore, limit time.Duration) {
+	for {
+		time.Sleep(time.Second * 5)
+		for sid, t := range hlsSubTimer {
+			if time.Since(t) > limit {
+				streamer.UnsubscribeToHLSStream(sid.String(), "local")
+				forwarder.StopStream(sid.String(), kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS) //This could fail if it's a local stream, but it's ok.
+				delete(hlsSubTimer, sid)
+			}
+		}
+	}
+}
+
+func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
+	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client, hive *network.Hive, ffmpegPath string) {
+
+	hlsSubTimer := make(map[streaming.StreamID]time.Time)
+	go startHlsUnsubscribeWorker(hlsSubTimer, streamer, forwarder, time.Second*10)
+
+	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, ffmpegPath)
+
 	server.HandleHLSPlay(
 		func(reqPath string) (*lpmsStream.HLSBuffer, error) {
 			var strmID string
@@ -41,7 +61,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 
 			//Validate the stream ID format
 			sid := streaming.StreamID(strmID)
-			_, streamID := sid.SplitComponents()
+			nodeID, streamID := sid.SplitComponents()
 
 			if strmID == "" || streamID == "" {
 				glog.Errorf("Cannot find stream for %v", reqPath)
@@ -50,8 +70,13 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 
 			strm := streamer.GetNetworkStream(streaming.StreamID(strmID))
 			if strm == nil {
-				glog.Infof("Cannot find HLS stream:%v locally, forwarding request to the newtork", strmID)
-				forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS)
+				if streamer.SelfAddress != nodeID {
+					glog.Infof("Cannot find HLS stream:%v locally, forwarding request to the newtork", strmID)
+					forwarder.Stream(strmID, kademlia.Address(ethCommon.HexToHash("")), lpmsStream.HLS)
+				} else {
+					glog.Infof("Cannot find HLS stream:%v, returning 404", strmID)
+					return nil, ErrNotFound
+				}
 			} else {
 				// glog.Infof("Found HLS stream:%v locally", strmID)
 			}
@@ -60,15 +85,15 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			if hlsBuffer == nil {
 				glog.Infof("Creating new HLS buffer")
 				hlsBuffer = lpmsStream.NewHLSBuffer()
-				ctx := context.Background()
 				subID := "local"
-				err := streamer.SubscribeToHLSStream(ctx, strmID, subID, hlsBuffer)
+				err := streamer.SubscribeToHLSStream(strmID, subID, hlsBuffer)
 				if err != nil {
 					glog.Errorf("Error subscribing to hls stream:%v", reqPath)
 					return nil, err
 				}
 			}
 			// glog.Infof("Buffer subscribed to local stream:%v ", strmID)
+			hlsSubTimer[streaming.StreamID(strmID)] = time.Now()
 
 			return hlsBuffer.(*lpmsStream.HLSBuffer), nil
 		})
@@ -143,7 +168,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			q := pubsub.NewQueue()
 			subID := streaming.RandomStreamID().Str()
 
-			err := streamer.SubscribeToRTMPStream(ctx, strmID, subID, q)
+			err := streamer.SubscribeToRTMPStream(strmID, subID, q)
 			if err != nil {
 				glog.Errorf("Error subscribing to stream %v", err)
 				return err
@@ -182,17 +207,34 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			sid := streaming.StreamID(s.GetStreamID())
 			nodeID, _ := sid.SplitComponents()
 			var source string
+
 			if nodeID == streamer.SelfAddress {
 				source = "local"
 			} else {
-				source = nodeID.Str()
+				source = fmt.Sprintf("%v", nodeID)
 			}
+
 			if s.Format == lpmsStream.HLS {
 				ret = append(ret, map[string]string{"format": "hls", "streamID": s.GetStreamID(), "source": source})
 			} else {
 				ret = append(ret, map[string]string{"format": "rtmp", "streamID": s.GetStreamID(), "source": source})
 			}
 		}
+
+		js, err := json.Marshal(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	})
+
+	http.HandleFunc("/peersCount", func(w http.ResponseWriter, r *http.Request) {
+		c := hive.PeersCount()
+		ret := make(map[string]int)
+		ret["count"] = c
 
 		js, err := json.Marshal(ret)
 		if err != nil {

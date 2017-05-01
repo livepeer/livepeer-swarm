@@ -224,7 +224,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 		srsRtmpPort := strconv.Itoa(rtmpPortNum + 500)
 		srsHttpPort := strconv.Itoa(rtmpPortNum + 6000)
 
-		go mediaserver.StartLPMS(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, self.streamer, self.cloud, self.streamDB, self.viz)
+		go mediaserver.StartLPMS(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, self.streamer, self.cloud, self.streamDB, self.viz, self.hive, self.config.FFMpegPath)
 	}
 
 	glog.V(logger.Debug).Infof("Swarm http proxy started on port: %v", self.config.Port)
@@ -320,7 +320,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId, "")
+	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId, "", "")
 	if err != nil {
 		return
 	}

@@ -16,7 +16,7 @@ type peerMuxer struct {
 }
 
 func (p *peerMuxer) WritePlaylist(pl m3u8.MediaPlaylist) error {
-	glog.Infof("Writing pl to peer")
+	glog.Infof("Writing pl to peer", p.peer.Addr())
 	chunk := streaming.VideoChunk{
 		ID:   streaming.DeliverStreamMsgID,
 		M3U8: pl.Encode().Bytes(),
@@ -33,7 +33,7 @@ func (p *peerMuxer) WritePlaylist(pl m3u8.MediaPlaylist) error {
 }
 
 func (p *peerMuxer) WriteSegment(name string, s []byte) error {
-	glog.Infof("Writing segment to peer")
+	glog.Infof("Writing segment to peer %v", p.peer.Addr())
 	chunk := streaming.VideoChunk{
 		ID:         streaming.DeliverStreamMsgID,
 		HLSSegData: s,
