@@ -30,36 +30,6 @@ func TestStreamID(t *testing.T) {
 	}
 }
 
-func TestStreamerRegistry(t *testing.T) {
-	addr := RandomStreamID()
-	streamID := RandomStreamID()
-	streamer, _ := NewStreamer(addr)
-
-	firstStream, _ := streamer.AddNewStream()
-	_, rs := firstStream.ID.SplitComponents()
-
-	if len(streamer.Streams) != 1 {
-		t.Errorf("AddNewStream() didn't add a stream to the streamer")
-	}
-
-	resStream, _ := streamer.GetStream(addr, rs)
-	if resStream != firstStream {
-		t.Errorf("GetStream() didn't return the expected stream")
-	}
-
-	// Subscribe to stream
-	sid := MakeStreamID(addr, streamID.Str())
-	_, err := streamer.SubscribeToStream(sid.String())
-	if err != nil {
-		t.Errorf("Got an error subscribing to a new stream. %v", err)
-	}
-
-	_, err = streamer.SubscribeToStream(sid.String())
-	if err == nil {
-		t.Errorf("Didn't get an error subscribing to the same stream twice and should have.")
-	}
-}
-
 func TestNetworkStream(t *testing.T) {
 	addr := RandomStreamID()
 	// streamID := RandomStreamID()

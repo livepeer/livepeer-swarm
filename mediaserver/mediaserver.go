@@ -83,11 +83,11 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 				// glog.Infof("Found HLS stream:%v locally", strmID)
 			}
 
-			hlsBuffer := streamer.GetHLSMuxer(strmID)
+			subID := "local"
+			hlsBuffer := streamer.GetHLSMuxer(strmID, subID)
 			if hlsBuffer == nil {
 				glog.Infof("Creating new HLS buffer")
 				hlsBuffer = lpmsStream.NewHLSBuffer(HLSBufferCap)
-				subID := "local"
 				err := streamer.SubscribeToHLSStream(strmID, subID, hlsBuffer)
 				if err != nil {
 					glog.Errorf("Error subscribing to hls stream:%v", reqPath)
@@ -211,7 +211,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			return
 		}
 
-		glog.Info("Created Stream: %v", js)
+		glog.Infof("Created Stream: %s", js)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
 	})
@@ -260,6 +260,10 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
+	})
+
+	http.HandleFunc("/streamerStatus", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(streamer.CurrentStatus()))
 	})
 
 	fs := http.FileServer(http.Dir("static"))
