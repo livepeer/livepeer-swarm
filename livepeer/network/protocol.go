@@ -309,6 +309,7 @@ func (self *bzz) handle() error {
 		if req.Id == streaming.RequestStreamMsgID {
 			if strm == nil {
 				//Create new network stream?
+				glog.Infof("Cannot find stream %v locally, forwarding to the network.", concatedStreamID)
 				(*self.forwarder).Stream(string(concatedStreamID), self.remoteAddr.Addr, req.Format)
 				self.viz.LogRelay(string(concatedStreamID))
 			}
