@@ -29,7 +29,8 @@ import (
 
 var ErrNotFound = errors.New("NotFound")
 var HLSWaitTime = time.Second * 10
-var HLSBufferCap = uint(10)
+var HLSBufferCap = uint(43200) //12 hrs assuming 1s segment
+var HLSBufferWindow = uint(5)
 
 func startHlsUnsubscribeWorker(hlsSubTimer map[streaming.StreamID]time.Time, streamer *streaming.Streamer, forwarder storage.CloudStore, limit time.Duration) {
 	for {
@@ -87,7 +88,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			hlsBuffer := streamer.GetHLSMuxer(strmID, subID)
 			if hlsBuffer == nil {
 				glog.Infof("Creating new HLS buffer")
-				hlsBuffer = lpmsStream.NewHLSBuffer(HLSBufferCap)
+				hlsBuffer = lpmsStream.NewHLSBuffer(HLSBufferWindow, HLSBufferCap)
 				err := streamer.SubscribeToHLSStream(strmID, subID, hlsBuffer)
 				if err != nil {
 					glog.Errorf("Error subscribing to hls stream:%v", reqPath)
@@ -100,7 +101,8 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 
 			startTime := time.Now()
 			for {
-				_, err := hlsBuffer.(*lpmsStream.HLSBuffer).GeneratePlaylist()
+				// _, err := hlsBuffer.(*lpmsStream.HLSBuffer).GeneratePlaylist(0)
+				_, err := hlsBuffer.(*lpmsStream.HLSBuffer).LatestPlaylist()
 				if err == nil {
 					hlsSubTimer[streaming.StreamID(strmID)] = time.Now()
 					return hlsBuffer.(*lpmsStream.HLSBuffer), nil

@@ -146,7 +146,7 @@ func TestSubscribeToHLS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	b := lpmsStream.NewHLSBuffer(100)
+	b := lpmsStream.NewHLSBuffer(10, 100)
 	err := streamer.SubscribeToHLSStream(id.String(), "local", b)
 	if err != nil {
 		t.Errorf("Got error when subscribing to hls stream: %v", err)
@@ -163,18 +163,19 @@ func TestSubscribeToHLS(t *testing.T) {
 	// pl.Segments[0] = &m3u8.MediaSegment{URI: "seg_1.ts"}
 	// pl.Segments[1] = &m3u8.MediaSegment{URI: "seg_2.ts"}
 	// strm.WriteHLSPlaylistToStream(*pl)
-	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg_1.ts", Data: []byte("data1")})
-	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: "seg_2.ts", Data: []byte("data2")})
+	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{SeqNo: 1, Name: "seg_1.ts", Data: []byte("data1")})
+	strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{SeqNo: 2, Name: "seg_2.ts", Data: []byte("data2")})
 
 	time.Sleep(time.Millisecond * 200) //Sleep to wait for the segment to propagate. This is a total hack.
 
 	// bpl, _ := b.WaitAndPopPlaylist(ctx)
-	bpl, _ := b.GeneratePlaylist()
+	// bpl, _ := b.GeneratePlaylist()
+	bpl, _ := b.LatestPlaylist()
 	bseg1, _ := b.WaitAndPopSegment(ctx, "seg_1.ts")
 	bseg2, _ := b.WaitAndPopSegment(ctx, "seg_2.ts")
 
-	if len(bpl.Segments) != 2 {
-		t.Errorf("Playlist length should be 2, but got %v", len(bpl.Segments))
+	if bpl.Count() != 2 {
+		t.Errorf("Playlist length should be 2, but got %v", bpl.Count())
 	}
 
 	if bytes.Compare(bseg1, []byte("data1")) != 0 {
@@ -197,7 +198,7 @@ func TestUnsubscribeToHLS(t *testing.T) {
 		t.Errorf("Expecting length of 0 for streams, got %v", streamsLen)
 	}
 
-	b := lpmsStream.NewHLSBuffer(100)
+	b := lpmsStream.NewHLSBuffer(10, 100)
 	err := streamer.SubscribeToHLSStream(id.String(), "local", b)
 
 	if err != nil {

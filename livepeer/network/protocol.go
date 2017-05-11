@@ -38,6 +38,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ericxtang/m3u8"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/errs"
@@ -47,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
-	"github.com/kz26/m3u8"
 	"github.com/livepeer/go-livepeer/livepeer/storage"
 	"github.com/livepeer/go-livepeer/livepeer/streaming"
 	lpmsStream "github.com/livepeer/lpms/stream"
@@ -685,7 +685,7 @@ func insertChunkToStream(chunk streaming.VideoChunk, strm *lpmsStream.VideoStrea
 		}
 	case chunk.HLSSegData != nil:
 		// glog.Infof("Inserting seg %v to %v", chunk.HLSSegName, strm.GetStreamID())
-		err := strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{Name: chunk.HLSSegName, Data: chunk.HLSSegData})
+		err := strm.WriteHLSSegmentToStream(lpmsStream.HLSSegment{SeqNo: chunk.Seq, Name: chunk.HLSSegName, Duration: chunk.Duration.Seconds(), Data: chunk.HLSSegData})
 		if err != nil {
 			glog.Errorf("Error inserting seg to stream: %v", err)
 		}
