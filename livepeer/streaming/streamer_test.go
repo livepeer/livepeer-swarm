@@ -34,7 +34,7 @@ func TestNetworkStream(t *testing.T) {
 	addr := RandomStreamID()
 	// streamID := RandomStreamID()
 	streamer, _ := NewStreamer(addr)
-	strm, _ := streamer.AddNewNetworkStream(lpmsStream.HLS)
+	strm, _ := streamer.AddNewNetworkStream(MakeStreamID(streamer.SelfAddress, fmt.Sprintf("%x", RandomStreamID())), lpmsStream.HLS)
 	strmLen := len(streamer.networkStreams)
 	if strmLen != 1 {
 		t.Errorf("Expecting 1 stream, got %v", strmLen)

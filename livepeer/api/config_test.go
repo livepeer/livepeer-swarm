@@ -86,7 +86,8 @@ var (
     "EnsRoot": "0x112234455c3a32fd11230c42e7bccd4a84e02010",
     "NetworkId": 323,
     "RTMPPort": "",
-    "FFMpegPath": ""
+    "FFMpegPath": "",
+    "VodPath": "VODPATH"
 }`
 )
 
@@ -108,6 +109,7 @@ func TestConfigWriteRead(t *testing.T) {
 	}
 	exp := strings.Replace(defaultConfig, "TMPDIR", orig.Path, -1)
 	exp = strings.Replace(exp, "\\", "\\\\", -1)
+	exp = strings.Replace(exp, "VODPATH", orig.Path[0:66], -1)
 	if string(data) != exp {
 		t.Fatalf("default config mismatch:\nexpected: %v\ngot: %v", exp, string(data))
 	}
