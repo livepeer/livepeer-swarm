@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -57,6 +58,7 @@ type Config struct {
 	NetworkId  uint64
 	RTMPPort   string
 	FFMpegPath string
+	VodPath    string
 }
 
 // config is agnostic to where private key is coming from
@@ -89,6 +91,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 		NetworkId:     networkId,
 		RTMPPort:      rtmpPort,
 		FFMpegPath:    ffmpegPath,
+		VodPath:       strings.Replace(path, "livepeernet/livepeer", "vod", -1),
 	}
 
 	data, err = ioutil.ReadFile(confpath)

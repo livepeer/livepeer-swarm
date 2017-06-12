@@ -183,6 +183,16 @@ func (self *Streamer) UnsubscribeToRTMPStream(strmID string, subID string) {
 	}
 }
 
+func (self *Streamer) UnsubscribeAll(strmID string) {
+	sub := self.subscribers[StreamID(strmID)]
+	if sub != nil {
+		sub.UnsubscribeAll()
+		self.cancellation[StreamID(strmID)]()
+		delete(self.subscribers, StreamID(strmID))
+		delete(self.networkStreams, StreamID(strmID))
+	}
+}
+
 func (self *Streamer) HasSubscribers(strmID string) bool {
 	sub := self.subscribers[StreamID(strmID)]
 	if sub != nil {
@@ -203,15 +213,12 @@ func (self *Streamer) GetAllNetworkStreams() []*lpmsStream.VideoStream {
 	return streams
 }
 
-func (self *Streamer) AddNewNetworkStream(format lpmsStream.VideoFormat) (strm *lpmsStream.VideoStream, err error) {
-	uid := RandomStreamID()
-	streamID := MakeStreamID(self.SelfAddress, fmt.Sprintf("%x", uid))
-
-	strm = lpmsStream.NewVideoStream(streamID.String(), format)
-	self.networkStreams[streamID] = strm
+func (self *Streamer) AddNewNetworkStream(strmID StreamID, format lpmsStream.VideoFormat) (strm *lpmsStream.VideoStream, err error) {
+	strm = lpmsStream.NewVideoStream(strmID.String(), format)
+	self.networkStreams[strmID] = strm
 
 	// glog.V(logger.Info).Infof("Adding new video stream with ID: %v", streamID)
-	return
+	return strm, nil
 }
 
 func (self *Streamer) DeleteNetworkStream(streamID StreamID) {
@@ -226,8 +233,8 @@ func (self *Streamer) CurrentStatus() string {
 
 	var subscribers []string
 	for k, v := range self.subscribers {
-		hls := v.HLSSubscribers()
-		rtmp := v.RTMPSubscribers()
+		hls := v.HLSSubscribersReport()
+		rtmp := v.RTMPSubscribersReport()
 		subscribers = append(subscribers, fmt.Sprintf("\n%v:\n%v hls: %v\n%v rtmp: %v\n\n", k.String(), len(hls), hls, len(rtmp), rtmp))
 	}
 

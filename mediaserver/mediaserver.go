@@ -21,6 +21,8 @@ import (
 	"github.com/nareix/joy4/av"
 	"github.com/nareix/joy4/av/avutil"
 
+	"net/url"
+
 	"github.com/livepeer/lpms"
 	lpmsStream "github.com/livepeer/lpms/stream"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
@@ -28,9 +30,11 @@ import (
 )
 
 var ErrNotFound = errors.New("NotFound")
+var ErrStreamPublish = errors.New("StreamPublishError")
 var HLSWaitTime = time.Second * 10
 var HLSBufferCap = uint(43200) //12 hrs assuming 1s segment
 var HLSBufferWindow = uint(5)
+var HLSUnsubscribeWaitLimit = time.Second * 20
 
 func startHlsUnsubscribeWorker(hlsSubTimer map[streaming.StreamID]time.Time, streamer *streaming.Streamer, forwarder storage.CloudStore, limit time.Duration) {
 	for {
@@ -45,22 +49,23 @@ func startHlsUnsubscribeWorker(hlsSubTimer map[streaming.StreamID]time.Time, str
 	}
 }
 
-func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort string, streamer *streaming.Streamer,
-	forwarder storage.CloudStore, streamdb *network.StreamDB, viz *streamingVizClient.Client, hive *network.Hive, ffmpegPath string) {
+func StartLPMS(rtmpPort string, httpPort string, streamer *streaming.Streamer, forwarder storage.CloudStore, streamdb *network.StreamDB,
+	viz *streamingVizClient.Client, hive *network.Hive, ffmpegPath string, vodPath string) {
 
 	hlsSubTimer := make(map[streaming.StreamID]time.Time)
-	go startHlsUnsubscribeWorker(hlsSubTimer, streamer, forwarder, time.Second*10)
+	go startHlsUnsubscribeWorker(hlsSubTimer, streamer, forwarder, HLSUnsubscribeWaitLimit)
 
-	server := lpms.New(rtmpPort, httpPort, srsRtmpPort, srsHttpPort, ffmpegPath)
+	server := lpms.New(rtmpPort, httpPort, ffmpegPath, vodPath)
 
 	server.HandleHLSPlay(
 		func(reqPath string) (*lpmsStream.HLSBuffer, error) {
-			var strmID string
-			regex, _ := regexp.Compile("\\/stream\\/([[:alpha:]]|\\d)*")
-			match := regex.FindString(reqPath)
-			if match != "" {
-				strmID = strings.Replace(match, "/stream/", "", -1)
-			}
+			strmID := parseStreamID(reqPath)
+			// var strmID string
+			// regex, _ := regexp.Compile("\\/stream\\/([[:alpha:]]|\\d)*")
+			// match := regex.FindString(reqPath)
+			// if match != "" {
+			// 	strmID = strings.Replace(match, "/stream/", "", -1)
+			// }
 
 			//Validate the stream ID format
 			sid := streaming.StreamID(strmID)
@@ -95,7 +100,7 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 					return nil, err
 				}
 			} else {
-				glog.Infof("Found HLS buffer for %v", reqPath)
+				// glog.Infof("Found HLS buffer for %v", reqPath)
 			}
 			// glog.Infof("Buffer subscribed to local stream:%v ", strmID)
 
@@ -118,30 +123,47 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 
 	server.HandleRTMPPublish(
 		//getStreamID
-		func(reqPath string) (string, error) {
+		func(url *url.URL) (string, error) {
 			return "", nil
 		},
 		//getStream
-		func(reqPath string) (lpmsStream.Stream, lpmsStream.Stream, error) {
-			var rtmpStream lpmsStream.Stream
-			var hlsStream lpmsStream.Stream
+		func(url *url.URL) (lpmsStream.Stream, lpmsStream.Stream, error) {
 
-			if strings.HasPrefix(reqPath, "/stream/") {
-				var strmID string
-				regex, _ := regexp.Compile("\\/stream\\/([[:alpha:]]|\\d)*")
-				match := regex.FindString(reqPath)
-				if match != "" {
-					strmID = strings.Replace(match, "/stream/", "", -1)
-				}
-				if strmID != "" {
-					rtmpStream = streamer.GetNetworkStream(streaming.StreamID(strmID))
-				}
+			rtmpStrmID := streaming.StreamID(parseStreamID(url.Path))
+			if rtmpStrmID == "" {
+				rtmpStrmID = streaming.MakeStreamID(streamer.SelfAddress, fmt.Sprintf("%x", streaming.RandomStreamID()))
+			}
+			nodeID, _ := rtmpStrmID.SplitComponents()
+			if nodeID != streamer.SelfAddress {
+				glog.Errorf("Invalid rtmp strmID - nodeID component needs to be self.")
+				return nil, nil, ErrStreamPublish
 			}
 
+			rtmpStream := streamer.GetNetworkStream(rtmpStrmID)
 			if rtmpStream == nil {
-				rtmpStream, _ = streamer.AddNewNetworkStream(lpmsStream.RTMP)
+				var rtmpErr error
+				rtmpStream, rtmpErr = streamer.AddNewNetworkStream(rtmpStrmID, lpmsStream.RTMP)
+				if rtmpErr != nil {
+					glog.Errorf("Error when creating RTMP stream: %v", rtmpErr)
+					return nil, nil, ErrStreamPublish
+				}
 			}
-			hlsStream, _ = streamer.AddNewNetworkStream(lpmsStream.HLS)
+
+			hlsStrmID := streaming.StreamID(url.Query().Get("hlsStrmID"))
+			if hlsStrmID == "" {
+				hlsStrmID = streaming.MakeStreamID(streamer.SelfAddress, fmt.Sprintf("%x", streaming.RandomStreamID()))
+			}
+			nodeID, _ = hlsStrmID.SplitComponents()
+			if nodeID != streamer.SelfAddress {
+				glog.Errorf("Invalid hlsStrmID - nodeID component needs to be self.")
+				return nil, nil, ErrStreamPublish
+			}
+			hlsStream, err := streamer.AddNewNetworkStream(hlsStrmID, lpmsStream.HLS)
+			if err != nil {
+				glog.Errorf("Error when creating HLS stream: %v", err)
+				return nil, nil, ErrStreamPublish
+			}
+
 			glog.Infof("RTMP streamID is %v", rtmpStream.GetStreamID())
 			glog.Infof("HLS streamID is %v", hlsStream.GetStreamID())
 
@@ -155,6 +177,8 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 			glog.Infof("Finish Stream - canceling stream (need to implement handler for Done())")
 			streamer.DeleteNetworkStream(streaming.StreamID(rtmpStrmID))
 			streamer.DeleteNetworkStream(streaming.StreamID(hlsStrmID))
+			streamer.UnsubscribeAll(rtmpStrmID)
+			streamer.UnsubscribeAll(hlsStrmID)
 		})
 
 	server.HandleRTMPPlay(
@@ -204,7 +228,8 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 		})
 
 	http.HandleFunc("/createStream", func(w http.ResponseWriter, r *http.Request) {
-		newRTMPStream, _ := streamer.AddNewNetworkStream(lpmsStream.RTMP)
+		strmID := streaming.MakeStreamID(streamer.SelfAddress, fmt.Sprintf("%x", streaming.RandomStreamID()))
+		newRTMPStream, _ := streamer.AddNewNetworkStream(strmID, lpmsStream.RTMP)
 		res := map[string]string{"streamID": newRTMPStream.GetStreamID()}
 
 		js, err := json.Marshal(res)
@@ -276,4 +301,14 @@ func StartLPMS(rtmpPort string, httpPort string, srsRtmpPort string, srsHttpPort
 	})
 
 	server.Start()
+}
+
+func parseStreamID(reqPath string) string {
+	var strmID string
+	regex, _ := regexp.Compile("\\/stream\\/([[:alpha:]]|\\d)*")
+	match := regex.FindString(reqPath)
+	if match != "" {
+		strmID = strings.Replace(match, "/stream/", "", -1)
+	}
+	return strmID
 }
