@@ -22,7 +22,7 @@ import (
 
 	"net/url"
 
-	"github.com/livepeer/lpms"
+	lpmscore "github.com/livepeer/lpms/core"
 	lpmsStream "github.com/livepeer/lpms/stream"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 	"github.com/nareix/joy4/av/pubsub"
@@ -55,7 +55,7 @@ func StartLPMS(rtmpPort string, httpPort string, streamer *streaming.Streamer, f
 	hlsSubTimer := make(map[streaming.StreamID]time.Time)
 	go startHlsUnsubscribeWorker(hlsSubTimer, streamer, forwarder, HLSUnsubscribeWaitLimit)
 
-	server := lpms.New(rtmpPort, httpPort, ffmpegPath, vodPath)
+	server := lpmscore.New(rtmpPort, httpPort, ffmpegPath, vodPath)
 
 	server.HandleHLSPlay(
 		//getMasterPlaylist
