@@ -13,6 +13,8 @@ network.
 * Request that your stream be transcoded into multiple formats.
 * Consume a live stream from the network.
 
+**NOTE: The current working node is accessible at [the go-livepeer repo](https://github.com/livepeer/go-livepeer). This is a proof of concept built on Swarm. We intend to bridge the browser, mobile, and native Swarm nodes together within the Livepeer network.**
+
 For full documentation and a project overview, check out the
 [Livepeer Documentation](https://github.com/livepeer/wiki/wiki)
 
@@ -30,7 +32,7 @@ If you have never set up your Go programming environment, do so according to [Go
 
 Now fetch and build the `livepeer` node using go.
 
-`go get github.com/livepeer/go-livepeer/cmd/livepeer`  
+`go get github.com/livepeer/livepeer-swarm/cmd/livepeer`  
 
 ## Setup
 
@@ -105,7 +107,7 @@ second node (running on RTMP port 1936) using the livepeer command.
 To start a true livestream instead of playing a pre-recorded video, visit our web client or use a broadcasting
 platform such as OBS, and point the output at `rtmp://localhost:1935/movie`
 
-You can also use the web interface to test out streaming. To do that, make sure you are runing livepeer in the go-livepeer directory, and visit http://localhost:8935/. It should redirect you to http://localhost:8935/static/broadcast.html. Make sure the http port is your rtmp port +7000.
+You can also use the web interface to test out streaming. To do that, make sure you are runing livepeer in the livepeer-swarm directory, and visit http://localhost:8935/. It should redirect you to http://localhost:8935/static/broadcast.html. Make sure the http port is your rtmp port +7000.
 
 
 ### Transcoding
@@ -144,15 +146,15 @@ Since this spike is built on top of Swarm and Ethereum, all the
 available functionality is exposed through this project. Please see
 the documentation at [the go-ethereum repository](http://github.com/ethereum/go-ethereum)
 
-### License information for go-livepeer and go-ethereum
+### License information for livepeer-swarm and go-ethereum
 
 This repo is largely based on a fork of the go-ethereum
 codebase. The license and author information is included in `./vendor/github.com/ethereum/go-ethereum/`.
 
-The go-livepeer library (i.e. all code outside of the `cmd` directory) is licensed under the
+The livepeer-swarm library (i.e. all code outside of the `cmd` directory) is licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html), also
 included in our repository in the `COPYING.LESSER` file.
 
-The go-livepeer binaries (i.e. all code inside of the `cmd` directory) is licensed under the
+The livepeer-swarm binaries (i.e. all code inside of the `cmd` directory) is licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also included
 in our repository in the `COPYING` file.
