@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/livepeer/go-livepeer/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
 )
 
 func manifest(paths ...string) (manifestReader storage.LazySectionReader) {

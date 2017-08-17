@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/livepeer/go-livepeer/livepeer/api"
+	"github.com/livepeer/livepeer-swarm/livepeer/api"
 	"github.com/rs/cors"
 )
 

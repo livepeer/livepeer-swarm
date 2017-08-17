@@ -22,12 +22,12 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/livepeer/go-livepeer/cmd/utils"
-	"github.com/livepeer/go-livepeer/internal/debug"
+	"github.com/livepeer/livepeer-swarm/cmd/utils"
+	"github.com/livepeer/livepeer-swarm/internal/debug"
 
-	lp "github.com/livepeer/go-livepeer/livepeer"
-	bzzapi "github.com/livepeer/go-livepeer/livepeer/api"
-	"github.com/livepeer/go-livepeer/livepeer/network"
+	lp "github.com/livepeer/livepeer-swarm/livepeer"
+	bzzapi "github.com/livepeer/livepeer-swarm/livepeer/api"
+	"github.com/livepeer/livepeer-swarm/livepeer/network"
 
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 	"gopkg.in/urfave/cli.v1"

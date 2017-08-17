@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
-	"github.com/livepeer/go-livepeer/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
 )
 
 // Hive is the logistic manager of the swarm

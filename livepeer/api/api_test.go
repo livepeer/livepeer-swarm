@@ -24,7 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/livepeer/go-livepeer/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
 )
 
 func testApi(t *testing.T, f func(*Api)) {

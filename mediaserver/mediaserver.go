@@ -16,9 +16,9 @@ import (
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
-	"github.com/livepeer/go-livepeer/livepeer/network"
-	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	"github.com/livepeer/livepeer-swarm/livepeer/network"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/streaming"
 
 	"net/url"
 

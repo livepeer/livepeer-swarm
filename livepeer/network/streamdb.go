@@ -3,7 +3,7 @@ package network
 import (
 	"strings"
 
-	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	"github.com/livepeer/livepeer-swarm/livepeer/streaming"
 )
 
 type StreamDB struct {

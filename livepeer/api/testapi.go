@@ -17,7 +17,7 @@
 package api
 
 import (
-	"github.com/livepeer/go-livepeer/livepeer/network"
+	"github.com/livepeer/livepeer-swarm/livepeer/network"
 )
 
 type Control struct {

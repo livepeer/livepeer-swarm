@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
-	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/streaming"
 	lpmsStream "github.com/livepeer/lpms/stream"
 )
 

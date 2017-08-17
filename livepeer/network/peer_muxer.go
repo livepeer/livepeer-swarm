@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	"github.com/livepeer/livepeer-swarm/livepeer/streaming"
 	lpmsStream "github.com/livepeer/lpms/stream"
 	"github.com/nareix/joy4/av"
 )

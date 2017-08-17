@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
-	"github.com/livepeer/go-livepeer/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
 	lpmsStream "github.com/livepeer/lpms/stream"
 )
 

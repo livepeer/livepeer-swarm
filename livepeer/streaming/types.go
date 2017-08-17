@@ -3,7 +3,7 @@ package streaming
 import (
 	"time"
 
-	"github.com/livepeer/go-livepeer/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
 	"github.com/nareix/joy4/av"
 )
 

@@ -48,8 +48,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
-	"github.com/livepeer/go-livepeer/livepeer/storage"
-	"github.com/livepeer/go-livepeer/livepeer/streaming"
+	"github.com/livepeer/livepeer-swarm/livepeer/storage"
+	"github.com/livepeer/livepeer-swarm/livepeer/streaming"
 	lpmsStream "github.com/livepeer/lpms/stream"
 	streamingVizClient "github.com/livepeer/streamingviz/client"
 )

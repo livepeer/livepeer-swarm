@@ -31,7 +31,7 @@ Usage:
 
 import (
  "github.com/ethereum/go-ethereum/common/httpclient"
- "github.com/livepeer/go-livepeer/livepeer/api/http"
+ "github.com/livepeer/livepeer-swarm/livepeer/api/http"
 )
 client := httpclient.New()
 // for (private) swarm proxy running locally
